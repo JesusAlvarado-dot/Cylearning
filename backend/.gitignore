@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+*.log
+logs/
+.DS_Store
+dist/
+build/
+.vscode/
+.idea/
+*.swp
+*.swo
+package-lock.json
+yarn.lock
+.jest_cache/
+coverage/
