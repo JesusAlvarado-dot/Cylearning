@@ -1,31 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../models/models.dart';
 
-// Gradients per question index (cycles)
-const _questionGradients = [
-  [Color(0xFF7C4DFF), Color(0xFF448AFF)],
-  [Color(0xFFFF6D00), Color(0xFFFFAB00)],
-  [Color(0xFF00897B), Color(0xFF26C6DA)],
-  [Color(0xFFE91E63), Color(0xFFFF5722)],
-  [Color(0xFF1565C0), Color(0xFF7B1FA2)],
+const _kBg     = Color(0xFFFFF9F2);
+const _kDark   = Color(0xFF1C1140);
+const _kMuted  = Color(0xFF8E8EA9);
+const _kGreen  = Color(0xFF059669);
+const _kRed    = Color(0xFFEF4444);
+const _kYellow = Color(0xFFFFCC00);
+
+const _qColors = [
+  Color(0xFF6B46F6),
+  Color(0xFF0EA5E9),
+  Color(0xFF059669),
+  Color(0xFFEF4444),
+  Color(0xFFF97316),
 ];
-
-const _questionEmojis = ['🧠', '🔐', '🛡️', '⚡', '🎯', '💡', '🔍', '🌐'];
-
-const _optionColors = [
-  Color(0xFF7C4DFF),
-  Color(0xFF2196F3),
-  Color(0xFFFF6D00),
-  Color(0xFFE91E63),
+const _qBgColors = [
+  Color(0xFFEFEBFF),
+  Color(0xFFE0F2FE),
+  Color(0xFFECFDF5),
+  Color(0xFFFFF1F1),
+  Color(0xFFFFF7ED),
 ];
 
 class EjerciciosScreen extends StatefulWidget {
   final String? leccionId;
-
   const EjerciciosScreen({super.key, this.leccionId});
-
   @override
   State<EjerciciosScreen> createState() => _EjerciciosScreenState();
 }
@@ -33,60 +37,73 @@ class EjerciciosScreen extends StatefulWidget {
 class _EjerciciosScreenState extends State<EjerciciosScreen>
     with TickerProviderStateMixin {
   late Future<List<Ejercicio>> _ejerciciosF;
+
+  List<Ejercicio> _ejercicios = [];
   int _currentIndex = 0;
-  int? _selectedAnswer;
-  bool _confirmed = false;
-  int _correctCount = 0;
+  int? _selectedOption;
+  bool _answered = false;
+  bool _isCorrect = false;
+  int _score = 0;
   bool _finished = false;
+  bool _progressSaved = false;
 
   late AnimationController _feedbackCtrl;
   late Animation<double> _feedbackAnim;
-  late AnimationController _optionPulseCtrl;
-  late Animation<double> _optionPulseAnim;
+  late AnimationController _bounceCtrl;
 
   @override
   void initState() {
     super.initState();
-    _ejerciciosF = ApiService.getEjercicios(widget.leccionId ?? '');
+    _ejerciciosF = widget.leccionId != null
+        ? ApiService.getEjercicios(widget.leccionId!)
+        : Future.value([]);
+
     _feedbackCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 400),
     );
     _feedbackAnim = CurvedAnimation(
-      parent: _feedbackCtrl,
-      curve: Curves.elasticOut,
-    );
-    _optionPulseCtrl = AnimationController(
+        parent: _feedbackCtrl, curve: Curves.elasticOut);
+
+    _bounceCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
-    _optionPulseAnim = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _optionPulseCtrl, curve: Curves.easeInOut),
+      duration: const Duration(milliseconds: 300),
+      lowerBound: 0.96,
+      upperBound: 1.0,
+      value: 1.0,
     );
   }
 
-  void _seleccionar(int index) {
+  @override
+  void dispose() {
+    _feedbackCtrl.dispose();
+    _bounceCtrl.dispose();
+    super.dispose();
+  }
+
+  Color get _accentColor => _qColors[_currentIndex % _qColors.length];
+  Color get _accentBg    => _qBgColors[_currentIndex % _qBgColors.length];
+
+  void _onOptionTap(int idx) {
+    if (_answered) return;
     HapticFeedback.lightImpact();
-    setState(() => _selectedAnswer = index);
-    _optionPulseCtrl.forward().then((_) => _optionPulseCtrl.reverse());
-  }
-
-  void _confirmar(Ejercicio ejercicio) {
-    HapticFeedback.mediumImpact();
-    final isCorrect = _selectedAnswer == ejercicio.respuestaCorrecta;
+    final correct = idx == _ejercicios[_currentIndex].respuestaCorrecta;
     setState(() {
-      _confirmed = true;
-      if (isCorrect) _correctCount++;
+      _selectedOption = idx;
+      _answered = true;
+      _isCorrect = correct;
+      if (correct) _score++;
     });
     _feedbackCtrl.forward(from: 0);
+    _bounceCtrl.reverse().then((_) => _bounceCtrl.forward());
   }
 
-  void _siguiente(List<Ejercicio> ejercicios) {
-    if (_currentIndex < ejercicios.length - 1) {
+  void _onNext() {
+    if (_currentIndex < _ejercicios.length - 1) {
       setState(() {
         _currentIndex++;
-        _selectedAnswer = null;
-        _confirmed = false;
+        _selectedOption = null;
+        _answered = false;
       });
       _feedbackCtrl.reset();
     } else {
@@ -97,166 +114,137 @@ class _EjerciciosScreenState extends State<EjerciciosScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F0FF),
+      backgroundColor: _kBg,
       body: FutureBuilder<List<Ejercicio>>(
         future: _ejerciciosF,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return _LoadingView();
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(
+                child: CircularProgressIndicator(color: Color(0xFF6B46F6)));
           }
-          if (snapshot.hasError) {
+          if (snap.hasError) {
             return _ErrorView(
-              onRetry: () => setState(() {
-                _ejerciciosF =
-                    ApiService.getEjercicios(widget.leccionId ?? '');
-              }),
-            );
+                error: snap.error.toString(),
+                onBack: () => Navigator.of(context).pop());
           }
 
-          final ejercicios = snapshot.data ?? [];
+          // Sync list once on first load
+          if (_ejercicios.isEmpty && (snap.data?.isNotEmpty ?? false)) {
+            WidgetsBinding.instance.addPostFrameCallback(
+                (_) => setState(() => _ejercicios = snap.data!));
+          }
+          final ejercicios =
+              _ejercicios.isNotEmpty ? _ejercicios : (snap.data ?? []);
 
           if (ejercicios.isEmpty) {
-            return _EmptyView();
+            return _EmptyView(onBack: () => Navigator.of(context).pop());
           }
 
           if (_finished) {
-            return _ResultadosView(
-              correctas: _correctCount,
+            if (!_progressSaved && widget.leccionId != null) {
+              _progressSaved = true;
+              final total = ejercicios.length;
+              final pct = total > 0 ? (_score * 100 ~/ total) : 0;
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
+                if (!mounted) return;
+                await context.read<AuthProvider>()
+                    .marcarLeccionCompleta(widget.leccionId!, pct);
+              });
+            }
+            return _ResultView(
+              score: _score,
               total: ejercicios.length,
-              onRepeat: () => setState(() {
+              onReplay: () => setState(() {
                 _currentIndex = 0;
-                _selectedAnswer = null;
-                _confirmed = false;
-                _correctCount = 0;
+                _selectedOption = null;
+                _answered = false;
+                _isCorrect = false;
+                _score = 0;
                 _finished = false;
+                _progressSaved = false;
+                _feedbackCtrl.reset();
               }),
-              onExit: () => Navigator.of(context).pop(),
+              onBack: () => Navigator.of(context).pop(),
+              onNext: () => Navigator.of(context)
+                  .popUntil(ModalRoute.withName('/nivel')),
             );
           }
 
           final ejercicio = ejercicios[_currentIndex];
-          final isCorrect =
-              _confirmed && _selectedAnswer == ejercicio.respuestaCorrecta;
-          final gradColors =
-              _questionGradients[_currentIndex % _questionGradients.length];
-          final qEmoji =
-              _questionEmojis[_currentIndex % _questionEmojis.length];
-
           return SafeArea(
             child: Column(
               children: [
-                _GameTopBar(
-                  current: _currentIndex + 1,
+                _TopBar(
+                  current: _currentIndex,
                   total: ejercicios.length,
-                  correctas: _correctCount,
+                  score: _score,
+                  accentColor: _accentColor,
                   onBack: () => Navigator.of(context).pop(),
                 ),
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Question card
-                        Container(
-                          padding: const EdgeInsets.all(22),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: gradColors,
+                        ScaleTransition(
+                          scale: _bounceCtrl,
+                          child: Container(
+                            padding: const EdgeInsets.all(22),
+                            decoration: BoxDecoration(
+                              color: _accentBg,
+                              borderRadius: BorderRadius.circular(22),
+                              border: Border.all(
+                                  color: _accentColor.withValues(alpha: 0.25),
+                                  width: 1.5),
                             ),
-                            borderRadius: BorderRadius.circular(28),
-                            boxShadow: [
-                              BoxShadow(
-                                color: gradColors[0].withValues(alpha: 0.4),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.25),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '✏️ Pregunta ${_currentIndex + 1}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Text(qEmoji,
-                                      style: const TextStyle(fontSize: 32)),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                ejercicio.pregunta,
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                  height: 1.4,
+                            child: Column(
+                              children: [
+                                Text(
+                                  _questionEmoji(_currentIndex),
+                                  style: const TextStyle(fontSize: 44),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 12),
+                                Text(
+                                  ejercicio.pregunta,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: _kDark,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 22),
-                        // Options
-                        ...List.generate(ejercicio.opciones.length, (i) {
-                          return _OptionButton(
-                            index: i,
-                            text: ejercicio.opciones[i],
-                            isSelected: _selectedAnswer == i,
-                            isConfirmed: _confirmed,
-                            isCorrect: i == ejercicio.respuestaCorrecta,
-                            pulseAnim: _optionPulseAnim,
-                            onTap: _confirmed ? null : () => _seleccionar(i),
-                          );
-                        }),
-                        // Feedback
-                        if (_confirmed) ...[
-                          const SizedBox(height: 16),
-                          ScaleTransition(
-                            scale: _feedbackAnim,
-                            child: _FeedbackBanner(
-                              isCorrect: isCorrect,
-                              explicacion: ejercicio.explicacion,
+                        const SizedBox(height: 20),
+                        ...List.generate(
+                          ejercicio.opciones.length,
+                          (i) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _OptionTile(
+                              label: _optionLabel(i),
+                              text: ejercicio.opciones[i],
+                              state: _optionState(i, ejercicio),
+                              accentColor: _accentColor,
+                              onTap: () => _onOptionTap(i),
                             ),
                           ),
-                        ],
-                        const SizedBox(height: 24),
-                        // Action button
-                        if (!_confirmed)
-                          _ActionButton(
-                            label: '✅  Confirmar respuesta',
-                            enabled: _selectedAnswer != null,
-                            color: gradColors[0],
-                            onTap: () => _confirmar(ejercicio),
-                          )
-                        else
-                          _ActionButton(
-                            label: _currentIndex < ejercicios.length - 1
-                                ? '➡️  Siguiente pregunta'
-                                : '🏆  Ver resultados',
-                            enabled: true,
-                            color: isCorrect
-                                ? const Color(0xFF2E7D32)
-                                : const Color(0xFF7C4DFF),
-                            onTap: () => _siguiente(ejercicios),
+                        ),
+                        const SizedBox(height: 8),
+                        if (_answered)
+                          ScaleTransition(
+                            scale: _feedbackAnim,
+                            child: _FeedbackBanner(correct: _isCorrect),
+                          ),
+                        const SizedBox(height: 16),
+                        if (_answered)
+                          _NextButton(
+                            isLast: _currentIndex == ejercicios.length - 1,
+                            accentColor: _accentColor,
+                            onTap: _onNext,
                           ),
                       ],
                     ),
@@ -270,97 +258,138 @@ class _EjerciciosScreenState extends State<EjerciciosScreen>
     );
   }
 
-  @override
-  void dispose() {
-    _feedbackCtrl.dispose();
-    _optionPulseCtrl.dispose();
-    super.dispose();
+  _OptionState _optionState(int i, Ejercicio ejercicio) {
+    if (!_answered) {
+      return i == _selectedOption
+          ? _OptionState.selected
+          : _OptionState.normal;
+    }
+    if (i == ejercicio.respuestaCorrecta) return _OptionState.correct;
+    if (i == _selectedOption) return _OptionState.wrong;
+    return _OptionState.normal;
+  }
+
+  String _questionEmoji(int i) {
+    const emojis = ['🤔', '💡', '🔐', '🌐', '🛡️', '🔍', '⚡'];
+    return emojis[i % emojis.length];
+  }
+
+  String _optionLabel(int i) {
+    const labels = ['A', 'B', 'C', 'D'];
+    return labels[i % labels.length];
   }
 }
 
-// ─── Game Top Bar ────────────────────────────────────────────────────────────
+// ─── Top bar ──────────────────────────────────────────────────────────────────
 
-class _GameTopBar extends StatelessWidget {
+class _TopBar extends StatelessWidget {
   final int current;
   final int total;
-  final int correctas;
+  final int score;
+  final Color accentColor;
   final VoidCallback onBack;
 
-  const _GameTopBar({
+  const _TopBar({
     required this.current,
     required this.total,
-    required this.correctas,
+    required this.score,
+    required this.accentColor,
     required this.onBack,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF7C4DFF), Color(0xFF5C35CC)],
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-      ),
-      padding: const EdgeInsets.fromLTRB(8, 12, 16, 20),
+      padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
+      color: _kBg,
       child: Column(
         children: [
           Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back_ios_rounded,
-                    color: Colors.white),
-                onPressed: onBack,
-              ),
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(total, (i) {
-                    final done = i < current;
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      width: done ? 24 : 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: i < current - 1
-                            ? const Color(0xFFFFD600)
-                            : i == current - 1
-                                ? Colors.white
-                                : Colors.white.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(7),
+              GestureDetector(
+                onTap: onBack,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _kDark.withValues(alpha: 0.07),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
-                    );
-                  }),
+                    ],
+                  ),
+                  child: const Icon(Icons.arrow_back_ios_new_rounded,
+                      size: 16, color: _kDark),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Ejercicios',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: _kDark,
+                  ),
                 ),
               ),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
+                  color: const Color(0xFFFFF3CD),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '⭐ $correctas',
+                  '⭐ $score',
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF7A5800),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: current / total,
-              backgroundColor: Colors.white.withValues(alpha: 0.2),
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(Color(0xFFFFD600)),
-              minHeight: 8,
-            ),
+          Row(
+            children: List.generate(total, (i) {
+              Color color;
+              if (i < current) {
+                color = accentColor;
+              } else if (i == current) {
+                color = accentColor.withValues(alpha: 0.4);
+              } else {
+                color = const Color(0xFFE5E7EB);
+              }
+              return Expanded(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(
+                '${current + 1} / $total',
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _kMuted),
+              ),
+            ],
           ),
         ],
       ),
@@ -368,95 +397,115 @@ class _GameTopBar extends StatelessWidget {
   }
 }
 
-// ─── Option Button ───────────────────────────────────────────────────────────
+// ─── Option tile ──────────────────────────────────────────────────────────────
 
-const _optionLetters = ['A', 'B', 'C', 'D'];
+enum _OptionState { normal, selected, correct, wrong }
 
-class _OptionButton extends StatelessWidget {
-  final int index;
+class _OptionTile extends StatefulWidget {
+  final String label;
   final String text;
-  final bool isSelected;
-  final bool isConfirmed;
-  final bool isCorrect;
-  final Animation<double> pulseAnim;
-  final VoidCallback? onTap;
+  final _OptionState state;
+  final Color accentColor;
+  final VoidCallback onTap;
 
-  const _OptionButton({
-    required this.index,
+  const _OptionTile({
+    required this.label,
     required this.text,
-    required this.isSelected,
-    required this.isConfirmed,
-    required this.isCorrect,
-    required this.pulseAnim,
+    required this.state,
+    required this.accentColor,
     required this.onTap,
   });
+  @override
+  State<_OptionTile> createState() => _OptionTileState();
+}
+
+class _OptionTileState extends State<_OptionTile>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _tapCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _tapCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 80),
+      lowerBound: 0.97,
+      upperBound: 1.0,
+      value: 1.0,
+    );
+  }
+
+  @override
+  void dispose() {
+    _tapCtrl.dispose();
+    super.dispose();
+  }
+
+  Color get _bgColor {
+    switch (widget.state) {
+      case _OptionState.correct:  return const Color(0xFFECFDF5);
+      case _OptionState.wrong:    return const Color(0xFFFFF1F1);
+      case _OptionState.selected: return widget.accentColor.withValues(alpha: 0.08);
+      case _OptionState.normal:   return Colors.white;
+    }
+  }
+
+  Color get _borderColor {
+    switch (widget.state) {
+      case _OptionState.correct:  return _kGreen;
+      case _OptionState.wrong:    return _kRed;
+      case _OptionState.selected: return widget.accentColor;
+      case _OptionState.normal:   return const Color(0xFFE5E7EB);
+    }
+  }
+
+  Color get _labelBg {
+    switch (widget.state) {
+      case _OptionState.correct:  return _kGreen;
+      case _OptionState.wrong:    return _kRed;
+      case _OptionState.selected: return widget.accentColor;
+      case _OptionState.normal:   return const Color(0xFFF3F4F6);
+    }
+  }
+
+  Color get _labelFg {
+    switch (widget.state) {
+      case _OptionState.normal: return _kMuted;
+      default:                  return Colors.white;
+    }
+  }
+
+  String get _trailingIcon {
+    switch (widget.state) {
+      case _OptionState.correct: return '✅';
+      case _OptionState.wrong:   return '❌';
+      default:                   return '';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final baseColor = index < _optionColors.length
-        ? _optionColors[index]
-        : const Color(0xFF7C4DFF);
-
-    Color bg = Colors.white;
-    Color border = Colors.grey.shade200;
-    Color textColor = const Color(0xFF2D2D44);
-    Color badgeBg = Colors.grey.shade100;
-    Color badgeText = Colors.grey;
-    Widget? trailingIcon;
-
-    if (isConfirmed) {
-      if (isCorrect) {
-        bg = const Color(0xFFE8F5E9);
-        border = const Color(0xFF4CAF50);
-        textColor = const Color(0xFF1B5E20);
-        badgeBg = const Color(0xFF4CAF50);
-        badgeText = Colors.white;
-        trailingIcon = const Icon(Icons.check_circle_rounded,
-            color: Color(0xFF4CAF50), size: 26);
-      } else if (isSelected) {
-        bg = const Color(0xFFFFEBEE);
-        border = const Color(0xFFEF5350);
-        textColor = const Color(0xFFB71C1C);
-        badgeBg = const Color(0xFFEF5350);
-        badgeText = Colors.white;
-        trailingIcon = const Icon(Icons.cancel_rounded,
-            color: Color(0xFFEF5350), size: 26);
-      }
-    } else if (isSelected) {
-      bg = baseColor.withValues(alpha: 0.08);
-      border = baseColor;
-      textColor = baseColor;
-      badgeBg = baseColor;
-      badgeText = Colors.white;
-    }
-
-    final letter = index < _optionLetters.length ? _optionLetters[index] : '?';
-
-    return AnimatedBuilder(
-      animation: pulseAnim,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: isSelected && !isConfirmed ? pulseAnim.value : 1.0,
-          child: child,
-        );
+    return GestureDetector(
+      onTapDown: (_) => _tapCtrl.reverse(),
+      onTapUp: (_) {
+        _tapCtrl.forward();
+        widget.onTap();
       },
-      child: GestureDetector(
-        onTap: onTap,
+      onTapCancel: () => _tapCtrl.forward(),
+      child: ScaleTransition(
+        scale: _tapCtrl,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: border, width: 2.5),
+            color: _bgColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _borderColor, width: 2),
             boxShadow: [
               BoxShadow(
-                color: (isSelected && !isConfirmed)
-                    ? baseColor.withValues(alpha: 0.2)
-                    : Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                color: _kDark.withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
@@ -464,39 +513,36 @@ class _OptionButton extends StatelessWidget {
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                width: 40,
-                height: 40,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
-                  color: badgeBg,
-                  borderRadius: BorderRadius.circular(12),
+                  color: _labelBg,
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Center(
                   child: Text(
-                    letter,
+                    widget.label,
                     style: TextStyle(
-                      color: badgeText,
+                      fontSize: 14,
                       fontWeight: FontWeight.w900,
-                      fontSize: 18,
+                      color: _labelFg,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: textColor,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    height: 1.3,
+                  widget.text,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: _kDark,
                   ),
                 ),
               ),
-              if (trailingIcon != null) ...[
-                const SizedBox(width: 8),
-                trailingIcon,
-              ],
+              if (_trailingIcon.isNotEmpty)
+                Text(_trailingIcon, style: const TextStyle(fontSize: 18)),
             ],
           ),
         ),
@@ -505,309 +551,332 @@ class _OptionButton extends StatelessWidget {
   }
 }
 
-// ─── Action Button ────────────────────────────────────────────────────────────
+// ─── Feedback banner ──────────────────────────────────────────────────────────
 
-class _ActionButton extends StatelessWidget {
-  final String label;
-  final bool enabled;
-  final Color color;
+class _FeedbackBanner extends StatelessWidget {
+  final bool correct;
+  const _FeedbackBanner({required this.correct});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(
+          color: correct
+              ? const Color(0xFFECFDF5)
+              : const Color(0xFFFFF1F1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: correct ? _kGreen : _kRed,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Text(correct ? '🎉' : '💪',
+                style: const TextStyle(fontSize: 26)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    correct ? '¡Correcto!' : '¡Casi!',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: correct ? _kGreen : _kRed,
+                    ),
+                  ),
+                  Text(
+                    correct
+                        ? 'Excelente respuesta 🌟'
+                        : 'Sigue intentando, puedes lograrlo',
+                    style: const TextStyle(
+                        fontSize: 12,
+                        color: _kMuted,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+// ─── Next button ──────────────────────────────────────────────────────────────
+
+class _NextButton extends StatelessWidget {
+  final bool isLast;
+  final Color accentColor;
   final VoidCallback onTap;
+  const _NextButton(
+      {required this.isLast, required this.accentColor, required this.onTap});
 
-  const _ActionButton({
-    required this.label,
-    required this.enabled,
-    required this.color,
-    required this.onTap,
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          height: 54,
+          decoration: BoxDecoration(
+            color: accentColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: accentColor.withValues(alpha: 0.35),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              isLast ? '¡Ver resultados! 🏆' : 'Siguiente  →',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+// ─── Result view ──────────────────────────────────────────────────────────────
+
+class _ResultView extends StatelessWidget {
+  final int score;
+  final int total;
+  final VoidCallback onReplay;
+  final VoidCallback onBack;
+  final VoidCallback onNext;
+  const _ResultView({
+    required this.score,
+    required this.total,
+    required this.onReplay,
+    required this.onBack,
+    required this.onNext,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: 60,
-        decoration: BoxDecoration(
-          color: enabled ? color : Colors.grey.shade300,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: enabled
-              ? [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.4),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
-                  )
-                ]
-              : [],
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: enabled ? Colors.white : Colors.grey.shade500,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+    final pct = total > 0 ? score / total : 0.0;
+    final stars = pct >= 0.9 ? 3 : pct >= 0.6 ? 2 : 1;
+    final Color accentColor;
+    final String emoji;
+    final String title;
+    final String subtitle;
+    if (pct >= 0.9) {
+      accentColor = _kGreen;
+      emoji = '🏆';
+      title = '¡Perfecto!';
+      subtitle = '¡Eres un experto en ciberseguridad!';
+    } else if (pct >= 0.6) {
+      accentColor = _kYellow;
+      emoji = '🌟';
+      title = '¡Muy bien!';
+      subtitle = 'Sigue así, casi lo dominas';
+    } else {
+      accentColor = _kRed;
+      emoji = '💪';
+      title = '¡Buen intento!';
+      subtitle = 'Practica un poco más y lo lograrás';
+    }
 
-// ─── Feedback Banner ─────────────────────────────────────────────────────────
-
-class _FeedbackBanner extends StatelessWidget {
-  final bool isCorrect;
-  final String explicacion;
-
-  const _FeedbackBanner({required this.isCorrect, required this.explicacion});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isCorrect
-              ? [const Color(0xFF43A047), const Color(0xFF00C853)]
-              : [const Color(0xFFE53935), const Color(0xFFFF6F00)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: (isCorrect
-                    ? const Color(0xFF43A047)
-                    : const Color(0xFFE53935))
-                .withValues(alpha: 0.35),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            isCorrect ? '🎉' : '💡',
-            style: const TextStyle(fontSize: 36),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isCorrect ? '¡Correcto! ¡Lo lograste!' : '¡Casi! Así es:',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 17,
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+        child: Column(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 140,
+                    height: 140,
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: accentColor, width: 3),
+                    ),
+                    child: Center(
+                        child: Text(emoji,
+                            style: const TextStyle(fontSize: 64))),
                   ),
-                ),
-                if (explicacion.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      color: accentColor,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Text(
-                    explicacion,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      fontSize: 14,
-                      height: 1.4,
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 15,
+                        color: _kMuted,
+                        fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 28),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                        3,
+                        (i) => Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
+                              child: Text(
+                                i < stars ? '⭐' : '☆',
+                                style: const TextStyle(fontSize: 36),
+                              ),
+                            )),
+                  ),
+                  const SizedBox(height: 28),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 32, vertical: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _kDark.withValues(alpha: 0.06),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _ScoreStat(
+                            label: 'Correctas',
+                            value: '$score',
+                            color: _kGreen),
+                        _Divider(),
+                        _ScoreStat(
+                            label: 'Total',
+                            value: '$total',
+                            color: _kDark),
+                        _Divider(),
+                        _ScoreStat(
+                            label: 'Puntaje',
+                            value: '${(pct * 100).round()}%',
+                            color: accentColor),
+                      ],
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Results View ─────────────────────────────────────────────────────────────
-
-class _ResultadosView extends StatelessWidget {
-  final int correctas;
-  final int total;
-  final VoidCallback onRepeat;
-  final VoidCallback onExit;
-
-  const _ResultadosView({
-    required this.correctas,
-    required this.total,
-    required this.onRepeat,
-    required this.onExit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final pct = total > 0 ? (correctas / total * 100).round() : 0;
-    final stars = pct >= 90 ? 3 : pct >= 70 ? 2 : pct >= 50 ? 1 : 0;
-
-    final String emoji;
-    final String titulo;
-    final List<Color> gradColors;
-
-    if (pct >= 90) {
-      emoji = '🏆';
-      titulo = '¡Eres una estrella!';
-      gradColors = [const Color(0xFFFF6F00), const Color(0xFFFFD600)];
-    } else if (pct >= 70) {
-      emoji = '🎉';
-      titulo = '¡Muy bien hecho!';
-      gradColors = [const Color(0xFF2E7D32), const Color(0xFF00C853)];
-    } else if (pct >= 50) {
-      emoji = '👍';
-      titulo = '¡Buen intento!';
-      gradColors = [const Color(0xFF1565C0), const Color(0xFF448AFF)];
-    } else {
-      emoji = '💪';
-      titulo = '¡Sigue practicando!';
-      gradColors = [const Color(0xFF6A1B9A), const Color(0xFF7C4DFF)];
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [gradColors[0].withValues(alpha: 0.1), const Color(0xFFF3F0FF)],
-        ),
-      ),
-      child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(emoji, style: const TextStyle(fontSize: 90)),
-                const SizedBox(height: 8),
-                Text(
-                  titulo,
-                  style: TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w900,
-                    color: gradColors[0],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                // Stars
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(3, (i) {
-                    return Text(
-                      i < stars ? '⭐' : '☆',
-                      style: TextStyle(
-                        fontSize: 36,
-                        color: i < stars
-                            ? const Color(0xFFFFD600)
-                            : Colors.grey.shade300,
-                      ),
-                    );
-                  }),
-                ),
-                const SizedBox(height: 24),
-                // Score card
-                Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: [
-                      BoxShadow(
-                        color: gradColors[0].withValues(alpha: 0.15),
-                        blurRadius: 24,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        '$correctas / $total',
+                // Mensaje si score < 70%
+                if (pct < 0.7) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF8E1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _kYellow, width: 1.5),
+                    ),
+                    child: const Row(children: [
+                      Text('😅', style: TextStyle(fontSize: 24)),
+                      SizedBox(width: 10),
+                      Expanded(child: Text(
+                        '¡Vaya! Necesitas una nota mayor a 70 para continuar.',
                         style: TextStyle(
-                          fontSize: 58,
-                          fontWeight: FontWeight.w900,
-                          color: gradColors[0],
-                        ),
-                      ),
-                      const Text(
-                        'respuestas correctas',
-                        style:
-                            TextStyle(color: Colors.grey, fontSize: 17),
-                      ),
-                      const SizedBox(height: 20),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: LinearProgressIndicator(
-                          value: total > 0 ? correctas / total : 0,
-                          backgroundColor: Colors.grey.shade100,
-                          valueColor: AlwaysStoppedAnimation<Color>(gradColors[0]),
-                          minHeight: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '$pct%',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: gradColors[0],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _StatBadge(
-                              emoji: '✅',
-                              value: '$correctas',
-                              label: 'Correctas',
-                              color: const Color(0xFF43A047),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _StatBadge(
-                              emoji: '❌',
-                              value: '${total - correctas}',
-                              label: 'Incorrectas',
-                              color: const Color(0xFFE53935),
-                            ),
+                          fontSize: 14, fontWeight: FontWeight.w700,
+                          color: Color(0xFF7A5800)),
+                      )),
+                    ]),
+                  ),
+                ],
+                // Botón "Siguiente" cuando score >= 70%
+                if (pct >= 0.7) ...[
+                  GestureDetector(
+                    onTap: onNext,
+                    child: Container(
+                      height: 58,
+                      decoration: BoxDecoration(
+                        color: _kGreen,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _kGreen.withValues(alpha: 0.4),
+                            blurRadius: 16, offset: const Offset(0, 8),
                           ),
                         ],
                       ),
-                    ],
+                      child: const Center(
+                        child: Text(
+                          '¡Siguiente lección!  →',
+                          style: TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 28),
-                _BigButton(
-                  label: '🔄  Intentar de nuevo',
-                  color: gradColors[0],
-                  onTap: onRepeat,
+                  const SizedBox(height: 10),
+                ],
+                GestureDetector(
+                  onTap: onReplay,
+                  child: Container(
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6B46F6),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              const Color(0xFF6B46F6).withValues(alpha: 0.35),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Text(
+                        '🔁  Intentar de nuevo',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 GestureDetector(
-                  onTap: onExit,
+                  onTap: onBack,
                   child: Container(
-                    height: 58,
+                    height: 50,
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: gradColors[0], width: 2.5),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                          color: const Color(0xFFE5E7EB), width: 1.5),
                     ),
-                    child: Center(
+                    child: const Center(
                       child: Text(
-                        '🏠  Volver al inicio',
+                        '← Volver a la lección',
                         style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: gradColors[0],
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: _kDark,
                         ),
                       ),
                     ),
@@ -815,175 +884,113 @@ class _ResultadosView extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatBadge extends StatelessWidget {
-  final String emoji;
-  final String value;
-  final String label;
-  final Color color;
-
-  const _StatBadge({
-    required this.emoji,
-    required this.value,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 26)),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
-              color: color,
-            ),
-          ),
-          Text(label,
-              style: const TextStyle(color: Colors.grey, fontSize: 13)),
-        ],
-      ),
-    );
-  }
-}
-
-class _BigButton extends StatelessWidget {
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _BigButton(
-      {required this.label, required this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        height: 60,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [color, color.withValues(alpha: 0.75)],
-          ),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.35),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
           ],
         ),
-        child: Center(
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
       ),
     );
   }
 }
 
-// ─── Helper Views ─────────────────────────────────────────────────────────────
-
-class _LoadingView extends StatelessWidget {
+class _Divider extends StatelessWidget {
   @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text('🧠', style: TextStyle(fontSize: 72)),
-          SizedBox(height: 20),
-          CircularProgressIndicator(color: Color(0xFF7C4DFF)),
-          SizedBox(height: 16),
-          Text('Cargando preguntas...',
-              style: TextStyle(
-                  color: Color(0xFF7C4DFF),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+      width: 1,
+      height: 40,
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      color: const Color(0xFFE5E7EB));
 }
+
+class _ScoreStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _ScoreStat(
+      {required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Column(
+        children: [
+          Text(value,
+              style: TextStyle(
+                  fontSize: 24, fontWeight: FontWeight.w900, color: color)),
+          const SizedBox(height: 2),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, color: _kMuted)),
+        ],
+      );
+}
+
+// ─── Error / Empty views ──────────────────────────────────────────────────────
 
 class _ErrorView extends StatelessWidget {
-  final VoidCallback onRetry;
-
-  const _ErrorView({required this.onRetry});
+  final String error;
+  final VoidCallback onBack;
+  const _ErrorView({required this.error, required this.onBack});
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('😥', style: TextStyle(fontSize: 72)),
-            const SizedBox(height: 16),
-            const Text(
-              'No pudimos cargar los ejercicios',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Reintentar',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7C4DFF),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 28, vertical: 14)),
-            ),
-          ],
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('😕', style: TextStyle(fontSize: 52)),
+              const SizedBox(height: 12),
+              const Text('No pudimos cargar los ejercicios',
+                  style: TextStyle(
+                      color: _kDark, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text(error,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: _kMuted, fontSize: 12)),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('Volver'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6B46F6),
+                    foregroundColor: Colors.white),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      );
 }
 
 class _EmptyView extends StatelessWidget {
+  final VoidCallback onBack;
+  const _EmptyView({required this.onBack});
+
   @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text('🎉', style: TextStyle(fontSize: 72)),
-          SizedBox(height: 16),
-          Text(
-            '¡Esta lección no tiene ejercicios aún!',
-            style: TextStyle(fontSize: 18, color: Colors.grey),
-            textAlign: TextAlign.center,
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('📭', style: TextStyle(fontSize: 52)),
+              const SizedBox(height: 12),
+              const Text(
+                'Esta lección no tiene ejercicios todavía',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: _kDark,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('Volver'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6B46F6),
+                    foregroundColor: Colors.white),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      );
 }

@@ -174,6 +174,49 @@ class ApiService {
     }
   }
 
+  // PROGRESO ENDPOINTS
+  static Future<ProgresoResumen> getProgresoResumen() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/student/progreso/resumen'),
+      headers: _headers,
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return ProgresoResumen.fromJson(data['datos']);
+    }
+    throw Exception('Error al cargar progreso');
+  }
+
+  static Future<bool> completarLeccion(String leccionId, int porcentaje) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/student/lecciones/$leccionId/completar'),
+        headers: _headers,
+        body: jsonEncode({'porcentaje': porcentaje}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['datos']['desbloqueado'] == true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  static Future<bool> completarNivel(String nivelId, int porcentaje) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/student/niveles/$nivelId/completar'),
+        headers: _headers,
+        body: jsonEncode({'porcentaje': porcentaje}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['datos']['desbloqueado'] == true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   // ADMIN ENDPOINTS
   static Future<List<EstudianteRanking>> getEstudiantes({String orden = 'desc'}) async {
     final response = await http.get(
@@ -197,6 +240,56 @@ class ApiService {
     );
     if (response.statusCode != 200) {
       throw Exception(jsonDecode(response.body)['mensaje'] ?? 'Error al dar medalla');
+    }
+  }
+
+  static Future<void> crearUsuarioAdmin({
+    required String nombre,
+    required String email,
+    required String contrasena,
+    required String rol,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/usuarios'),
+      headers: _headers,
+      body: jsonEncode({
+        'nombre': nombre,
+        'email': email,
+        'contrasena': contrasena,
+        'rol': rol,
+      }),
+    );
+    if (response.statusCode != 201) {
+      final body = jsonDecode(response.body);
+      final errores = body['errores'] as List?;
+      if (errores != null && errores.isNotEmpty) {
+        throw Exception(errores.map((e) => e['mensaje']).join('\n'));
+      }
+      throw Exception(body['mensaje'] ?? 'Error al crear usuario');
+    }
+  }
+
+  static Future<void> actualizarUsuarioAdmin(
+      String id, Map<String, dynamic> data) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/usuarios/$id'),
+      headers: _headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al actualizar usuario');
+    }
+  }
+
+  static Future<void> eliminarUsuario(String id) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/usuarios/$id'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al eliminar usuario');
     }
   }
 
@@ -296,6 +389,170 @@ class ApiService {
       return jsonDecode(response.body);
     } else {
       throw Exception('Error al enviar respuesta');
+    }
+  }
+
+  // ── ADMIN: Niveles ────────────────────────────────────────────────────────
+
+  static Future<void> crearNivel(
+      String nombre, String descripcion, int orden, String dificultad) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/niveles'),
+      headers: _headers,
+      body: jsonEncode({
+        'nombre': nombre,
+        'descripcion': descripcion,
+        'orden': orden,
+        'numero': orden,
+        'dificultad': dificultad,
+      }),
+    );
+    if (response.statusCode != 201) {
+      final body = jsonDecode(response.body);
+      final errores = body['errores'] as List?;
+      if (errores != null && errores.isNotEmpty) {
+        throw Exception(errores.map((e) => e['mensaje']).join('\n'));
+      }
+      throw Exception(body['mensaje'] ?? 'Error al crear nivel');
+    }
+  }
+
+  static Future<void> actualizarNivel(
+      String id, Map<String, dynamic> data) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/niveles/$id'),
+      headers: _headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al actualizar nivel');
+    }
+  }
+
+  static Future<void> eliminarNivel(String id) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/niveles/$id'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al eliminar nivel');
+    }
+  }
+
+  // ── ADMIN: Temas ──────────────────────────────────────────────────────────
+
+  static Future<void> crearTema(
+      String nombre, String descripcion, String nivelId, int orden) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/temas'),
+      headers: _headers,
+      body: jsonEncode({
+        'nombre': nombre,
+        'descripcion': descripcion,
+        'nivel_id': nivelId,
+        'orden': orden,
+      }),
+    );
+    if (response.statusCode != 201) {
+      final body = jsonDecode(response.body);
+      final errores = body['errores'] as List?;
+      if (errores != null && errores.isNotEmpty) {
+        throw Exception(errores.map((e) => e['mensaje']).join('\n'));
+      }
+      throw Exception(body['mensaje'] ?? 'Error al crear tema');
+    }
+  }
+
+  static Future<void> actualizarTema(
+      String id, Map<String, dynamic> data) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/temas/$id'),
+      headers: _headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al actualizar tema');
+    }
+  }
+
+  static Future<void> eliminarTema(String id) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/temas/$id'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al eliminar tema');
+    }
+  }
+
+  // ── ADMIN: Lecciones (update / delete) ───────────────────────────────────
+
+  static Future<void> actualizarLeccion(
+      String id, Map<String, dynamic> data) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/lecciones/$id'),
+      headers: _headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al actualizar lección');
+    }
+  }
+
+  static Future<void> eliminarLeccion(String id) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/lecciones/$id'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al eliminar lección');
+    }
+  }
+
+  // ── ADMIN: Ejercicios ─────────────────────────────────────────────────────
+
+  static Future<List<Map<String, dynamic>>> getEjerciciosAdmin(
+      {String? leccionId}) async {
+    final query = leccionId != null ? '?leccion_id=$leccionId&limite=200' : '?limite=200';
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/ejercicios$query'),
+      headers: _headers,
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return List<Map<String, dynamic>>.from(data['datos']['datos']);
+    } else {
+      throw Exception('Error al cargar ejercicios');
+    }
+  }
+
+  static Future<void> actualizarEjercicio(
+      String id, Map<String, dynamic> data) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/ejercicios/$id'),
+      headers: _headers,
+      body: jsonEncode(data),
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al actualizar ejercicio');
+    }
+  }
+
+  static Future<void> eliminarEjercicio(String id) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/ejercicios/$id'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al eliminar ejercicio');
     }
   }
 }

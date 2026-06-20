@@ -4,21 +4,35 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../models/models.dart';
 
-const _levelGradients = [
-  [Color(0xFF7C4DFF), Color(0xFF448AFF)],
-  [Color(0xFFFF6D00), Color(0xFFFFAB00)],
-  [Color(0xFF00897B), Color(0xFF26C6DA)],
-  [Color(0xFFE91E63), Color(0xFFFF5722)],
-  [Color(0xFF1565C0), Color(0xFF7B1FA2)],
-  [Color(0xFF2E7D32), Color(0xFF43A047)],
-  [Color(0xFF4527A0), Color(0xFF0288D1)],
+const _kBg     = Color(0xFFFFF9F2);
+const _kDark   = Color(0xFF1C1140);
+const _kMuted  = Color(0xFF8E8EA9);
+const _kYellow = Color(0xFFFFCC00);
+
+// Solid accent colors — one per level (no gradients)
+const _levelColors = [
+  Color(0xFF6B46F6), // purple
+  Color(0xFFEF4444), // red
+  Color(0xFF059669), // green
+  Color(0xFFF97316), // orange
+  Color(0xFF0EA5E9), // sky blue
+  Color(0xFFD946EF), // fuchsia
+  Color(0xFF8B5CF6), // violet
 ];
 
 const _levelEmojis = ['🔰', '⚡', '🛡️', '🚀', '🏆', '🌟', '🎯'];
+const _levelBgs    = [
+  Color(0xFFEFEBFF),
+  Color(0xFFFFF1F1),
+  Color(0xFFECFDF5),
+  Color(0xFFFFF7ED),
+  Color(0xFFE0F2FE),
+  Color(0xFFFDF4FF),
+  Color(0xFFF5F3FF),
+];
 
 class NivelesScreen extends StatefulWidget {
   const NivelesScreen({super.key});
-
   @override
   State<NivelesScreen> createState() => _NivelesScreenState();
 }
@@ -27,6 +41,7 @@ class _NivelesScreenState extends State<NivelesScreen>
     with SingleTickerProviderStateMixin {
   late Future<List<Nivel>> _nivelesF;
   late AnimationController _waveCtrl;
+  late Animation<double> _waveAnim;
 
   @override
   void initState() {
@@ -34,8 +49,11 @@ class _NivelesScreenState extends State<NivelesScreen>
     _nivelesF = ApiService.getNiveles();
     _waveCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
+    _waveAnim = Tween<double>(begin: -4.0, end: 4.0).animate(
+      CurvedAnimation(parent: _waveCtrl, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -47,106 +65,118 @@ class _NivelesScreenState extends State<NivelesScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F0FF),
+      backgroundColor: _kBg,
       body: Consumer<AuthProvider>(
         builder: (context, auth, _) {
+          final nombre =
+              auth.usuario?.nombre.split(' ').first ?? 'Explorador';
+          final puntos = auth.usuario?.puntosTotales ?? 0;
+          final medallas = auth.usuario?.medallas.length ?? 0;
+
           return CustomScrollView(
             slivers: [
+              // ── Header ────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: _Header(
+                  nombre: nombre,
+                  puntos: puntos,
+                  medallas: medallas,
                   auth: auth,
-                  waveAnim: _waveCtrl,
+                  waveAnim: _waveAnim,
                 ),
               ),
+              // ── Section title ─────────────────────────────────────────
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20, 24, 20, 4),
+                  child: Text(
+                    '🗺️  Elige tu misión',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: _kDark,
+                    ),
+                  ),
+                ),
+              ),
+              // ── Grid ─────────────────────────────────────────────────
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                 sliver: FutureBuilder<List<Nivel>>(
                   future: _nivelesF,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
                       return const SliverFillRemaining(
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text('⏳', style: TextStyle(fontSize: 56)),
-                              SizedBox(height: 16),
-                              CircularProgressIndicator(
-                                  color: Color(0xFF7C4DFF)),
-                              SizedBox(height: 12),
-                              Text('Cargando niveles...',
-                                  style: TextStyle(
-                                      color: Color(0xFF7C4DFF),
-                                      fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      );
+                          child: Center(
+                              child: CircularProgressIndicator(
+                                  color: Color(0xFF6B46F6))));
                     }
-                    if (snapshot.hasError) {
+                    if (snap.hasError) {
                       return SliverFillRemaining(
                         child: Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Text('😥',
-                                  style: TextStyle(fontSize: 56)),
+                              const Text('😕',
+                                  style: TextStyle(fontSize: 52)),
+                              const SizedBox(height: 12),
+                              const Text('No pudimos cargar los niveles',
+                                  style: TextStyle(
+                                      color: _kMuted, fontSize: 15)),
                               const SizedBox(height: 16),
-                              const Text(
-                                'No pudimos cargar los niveles',
-                                style: TextStyle(
-                                    fontSize: 16, color: Colors.grey),
-                              ),
-                              const SizedBox(height: 20),
                               ElevatedButton.icon(
                                 onPressed: () => setState(
-                                    () => _nivelesF = ApiService.getNiveles()),
+                                    () => _nivelesF =
+                                        ApiService.getNiveles()),
                                 icon: const Icon(Icons.refresh_rounded),
                                 label: const Text('Reintentar'),
                                 style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF7C4DFF)),
+                                    backgroundColor:
+                                        const Color(0xFF6B46F6)),
                               ),
                             ],
                           ),
                         ),
                       );
                     }
-
-                    final niveles = snapshot.data ?? [];
+                    final niveles = snap.data ?? [];
                     if (niveles.isEmpty) {
                       return const SliverFillRemaining(
                         child: Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text('📚', style: TextStyle(fontSize: 56)),
-                              SizedBox(height: 16),
-                              Text('Aún no hay niveles disponibles',
+                              Text('📚', style: TextStyle(fontSize: 52)),
+                              SizedBox(height: 12),
+                              Text('Aún no hay niveles',
                                   style: TextStyle(
-                                      fontSize: 16, color: Colors.grey)),
+                                      color: _kMuted, fontSize: 15)),
                             ],
                           ),
                         ),
                       );
                     }
-
                     return SliverGrid(
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
-                        mainAxisSpacing: 16,
-                        crossAxisSpacing: 16,
-                        childAspectRatio: 0.82,
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 14,
+                        childAspectRatio: 0.8,
                       ),
                       delegate: SliverChildBuilderDelegate(
-                        (context, index) {
+                        (ctx, i) {
+                          final isCompleted = auth.isNivelCompletado(niveles[i].id);
+                          final isLocked = i > 0 &&
+                              !auth.isNivelCompletado(niveles[i - 1].id);
                           return _NivelCard(
-                            nivel: niveles[index],
-                            gradColors: _levelGradients[
-                                index % _levelGradients.length],
-                            emoji:
-                                _levelEmojis[index % _levelEmojis.length],
-                            position: index + 1,
+                            nivel: niveles[i],
+                            color: _levelColors[i % _levelColors.length],
+                            bgColor: _levelBgs[i % _levelBgs.length],
+                            emoji: _levelEmojis[i % _levelEmojis.length],
+                            index: i,
+                            isLocked: isLocked,
+                            isCompleted: isCompleted,
                           );
                         },
                         childCount: niveles.length,
@@ -163,143 +193,183 @@ class _NivelesScreenState extends State<NivelesScreen>
   }
 }
 
-// ─── Header ───────────────────────────────────────────────────────────────────
+// ─── Header ──────────────────────────────────────────────────────────────────
 
 class _Header extends StatelessWidget {
+  final String nombre;
+  final int puntos;
+  final int medallas;
   final AuthProvider auth;
   final Animation<double> waveAnim;
 
-  const _Header({required this.auth, required this.waveAnim});
+  const _Header({
+    required this.nombre,
+    required this.puntos,
+    required this.medallas,
+    required this.auth,
+    required this.waveAnim,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final nombre =
-        auth.usuario?.nombre.split(' ').first ?? 'Explorador';
-    final puntos = auth.usuario?.puntosTotales ?? 0;
-
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF7C4DFF), Color(0xFF5C35CC)],
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(36)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      color: _kBg,
+      child: Stack(
+        children: [
+          // Background blobs
+          Positioned(
+            top: -40, right: -40,
+            child: Container(
+              width: 160, height: 160,
+              decoration: BoxDecoration(
+                color: const Color(0xFF6B46F6).withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 0, left: -20,
+            child: Container(
+              width: 100, height: 100,
+              decoration: BoxDecoration(
+                color: _kYellow.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: Row(
                 children: [
+                  // Avatar
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFEBFF),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: const Color(0xFF6B46F6), width: 2.5),
+                    ),
+                    child: Center(
+                      child: Text(
+                        nombre[0].toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF6B46F6),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AnimatedBuilder(
                           animation: waveAnim,
-                          builder: (ctx, child) => Transform.translate(
-                            offset: Offset(0, -4 * waveAnim.value),
-                            child: child,
+                          builder: (_, child) => Row(
+                            children: [
+                              Transform.translate(
+                                offset: Offset(0, waveAnim.value * 0.5),
+                                child: const Text('👋 ',
+                                    style: TextStyle(fontSize: 18)),
+                              ),
+                              Flexible(
+                                child: Text(
+                                  '¡Hola, $nombre!',
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    color: _kDark,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
-                          child: const Text('👋',
-                              style: TextStyle(fontSize: 36)),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '¡Hola, $nombre!',
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const Text(
-                          '¿Listo para aprender hoy?',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Color(0xFFD1C4E9),
-                          ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            _StatPill(
+                                emoji: '⭐', label: '$puntos pts',
+                                color: const Color(0xFFFFF3CD),
+                                textColor: const Color(0xFF7A5800)),
+                            const SizedBox(width: 8),
+                            _StatPill(
+                                emoji: '🏅', label: '$medallas',
+                                color: const Color(0xFFEFEBFF),
+                                textColor: const Color(0xFF5B21B6)),
+                          ],
                         ),
                       ],
                     ),
                   ),
+                  // Menu
                   PopupMenuButton<String>(
-                    offset: const Offset(0, 56),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                        borderRadius: BorderRadius.circular(14)),
                     icon: Container(
-                      width: 52,
-                      height: 52,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.4),
-                            width: 2),
-                      ),
-                      child: Center(
-                        child: Text(
-                          (auth.usuario?.nombre ?? 'U')[0].toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 22,
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _kDark.withValues(alpha: 0.07),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
-                        ),
+                        ],
                       ),
+                      child: const Icon(Icons.more_vert_rounded,
+                          color: _kDark),
                     ),
-                    itemBuilder: (context) => [
+                    itemBuilder: (_) => [
                       PopupMenuItem(
                         enabled: false,
-                        child: Text(
-                          auth.usuario?.nombre ?? '',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                        child: Text(auth.usuario?.nombre ?? '',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold)),
                       ),
                       const PopupMenuDivider(),
                       const PopupMenuItem(
                         value: 'perfil',
-                        child: Row(
-                          children: [
-                            Icon(Icons.person_rounded,
-                                color: Color(0xFF7C4DFF)),
-                            SizedBox(width: 10),
-                            Text('Mi perfil'),
-                          ],
-                        ),
+                        child: Row(children: [
+                          Icon(Icons.person_rounded,
+                              color: Color(0xFF6B46F6)),
+                          SizedBox(width: 10),
+                          Text('Mi perfil'),
+                        ]),
                       ),
                       if (auth.usuario?.rol == 'admin')
                         const PopupMenuItem(
                           value: 'admin',
-                          child: Row(
-                            children: [
-                              Icon(Icons.admin_panel_settings_rounded,
-                                  color: Color(0xFF7C4DFF)),
-                              SizedBox(width: 10),
-                              Text('Panel admin'),
-                            ],
-                          ),
+                          child: Row(children: [
+                            Icon(Icons.admin_panel_settings_rounded,
+                                color: Color(0xFF6B46F6)),
+                            SizedBox(width: 10),
+                            Text('Panel admin'),
+                          ]),
                         ),
                       const PopupMenuDivider(),
                       const PopupMenuItem(
                         value: 'logout',
-                        child: Row(
-                          children: [
-                            Icon(Icons.logout_rounded, color: Colors.red),
-                            SizedBox(width: 10),
-                            Text('Cerrar sesión',
-                                style: TextStyle(color: Colors.red)),
-                          ],
-                        ),
+                        child: Row(children: [
+                          Icon(Icons.logout_rounded, color: Colors.red),
+                          SizedBox(width: 10),
+                          Text('Cerrar sesión',
+                              style: TextStyle(color: Colors.red)),
+                        ]),
                       ),
                     ],
-                    onSelected: (value) {
-                      switch (value) {
+                    onSelected: (v) {
+                      switch (v) {
                         case 'perfil':
                           Navigator.of(context).pushNamed('/perfil');
                         case 'admin':
@@ -313,60 +383,6 @@ class _Header extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              // Stats row
-              Row(
-                children: [
-                  _StatChip(
-                    emoji: '⭐',
-                    value: '$puntos pts',
-                    color: const Color(0xFFFFD600),
-                  ),
-                  const SizedBox(width: 10),
-                  _StatChip(
-                    emoji: '🏅',
-                    value: '${auth.usuario?.medallas.length ?? 0} medallas',
-                    color: const Color(0xFFFF9100),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  final String emoji;
-  final String value;
-  final Color color;
-
-  const _StatChip(
-      {required this.emoji, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: Colors.white.withValues(alpha: 0.25), width: 1.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 16)),
-          const SizedBox(width: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
             ),
           ),
         ],
@@ -375,21 +391,55 @@ class _StatChip extends StatelessWidget {
   }
 }
 
+class _StatPill extends StatelessWidget {
+  final String emoji;
+  final String label;
+  final Color color;
+  final Color textColor;
+  const _StatPill({
+    required this.emoji,
+    required this.label,
+    required this.color,
+    required this.textColor,
+  });
+  @override
+  Widget build(BuildContext context) => Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          '$emoji $label',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: textColor,
+          ),
+        ),
+      );
+}
+
 // ─── Nivel Card ───────────────────────────────────────────────────────────────
 
 class _NivelCard extends StatefulWidget {
   final Nivel nivel;
-  final List<Color> gradColors;
+  final Color color;
+  final Color bgColor;
   final String emoji;
-  final int position;
-
+  final int index;
+  final bool isLocked;
+  final bool isCompleted;
   const _NivelCard({
     required this.nivel,
-    required this.gradColors,
+    required this.color,
+    required this.bgColor,
     required this.emoji,
-    required this.position,
+    required this.index,
+    required this.isLocked,
+    required this.isCompleted,
   });
-
   @override
   State<_NivelCard> createState() => _NivelCardState();
 }
@@ -397,17 +447,16 @@ class _NivelCard extends StatefulWidget {
 class _NivelCardState extends State<_NivelCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _tapCtrl;
-  late Animation<double> _scaleAnim;
 
   @override
   void initState() {
     super.initState();
     _tapCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 120),
-    );
-    _scaleAnim = Tween<double>(begin: 1.0, end: 0.93).animate(
-      CurvedAnimation(parent: _tapCtrl, curve: Curves.easeInOut),
+      duration: const Duration(milliseconds: 100),
+      lowerBound: 0.95,
+      upperBound: 1.0,
+      value: 1.0,
     );
   }
 
@@ -419,133 +468,163 @@ class _NivelCardState extends State<_NivelCard>
 
   @override
   Widget build(BuildContext context) {
+    final locked = widget.isLocked;
+    final completed = widget.isCompleted;
+    final cardColor = locked ? const Color(0xFFE5E7EB) : widget.color;
+    final cardBg    = locked ? const Color(0xFFF3F4F6) : widget.bgColor;
+
     return GestureDetector(
-      onTapDown: (_) => _tapCtrl.forward(),
-      onTapUp: (_) {
-        _tapCtrl.reverse();
-        Navigator.of(context)
-            .pushNamed('/nivel', arguments: widget.nivel);
+      onTapDown: locked ? null : (_) => _tapCtrl.reverse(),
+      onTapUp: locked ? null : (_) {
+        _tapCtrl.forward();
+        Navigator.of(context).pushNamed('/nivel', arguments: widget.nivel);
       },
-      onTapCancel: () => _tapCtrl.reverse(),
+      onTapCancel: locked ? null : () => _tapCtrl.forward(),
       child: ScaleTransition(
-        scale: _scaleAnim,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: widget.gradColors[0].withValues(alpha: 0.28),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // Top gradient area
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: widget.gradColors,
+        scale: _tapCtrl,
+        child: Stack(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: cardColor.withValues(alpha: locked ? 0.06 : 0.15),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
                   ),
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(24)),
-                ),
-                child: Column(
-                  children: [
-                    // Level number badge
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.25),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.5),
-                            width: 2),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${widget.nivel.orden}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(widget.emoji,
-                        style: const TextStyle(fontSize: 38)),
-                  ],
-                ),
+                ],
               ),
-              // Bottom info area
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        widget.nivel.nombre,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: widget.gradColors[0],
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color:
-                              widget.gradColors[0].withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '${widget.nivel.temas.length} temas',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: widget.gradColors[0],
-                            fontWeight: FontWeight.w700,
+              child: Column(
+                children: [
+                  // Colored top strip
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(22)),
+                    ),
+                    child: Column(
+                      children: [
+                        // Level badge
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: cardColor,
+                            shape: BoxShape.circle,
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Decorative stars
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(
-                          3,
-                          (i) => Text(
-                            i < (widget.position % 4) ? '⭐' : '☆',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: i < (widget.position % 4)
-                                  ? const Color(0xFFFFD600)
-                                  : Colors.grey.shade300,
+                          child: Center(
+                            child: Text(
+                              locked ? '🔒' : '${widget.nivel.orden}',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: locked ? 14 : 16,
+                              ),
                             ),
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        Text(
+                          locked ? '🔒' : widget.emoji,
+                          style: TextStyle(
+                            fontSize: 40,
+                            color: locked
+                                ? const Color(0xFF9CA3AF)
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Info section
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            locked ? 'Bloqueado' : widget.nivel.nombre,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: locked
+                                  ? const Color(0xFF9CA3AF)
+                                  : cardColor,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: cardBg,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              locked
+                                  ? 'Completa el anterior'
+                                  : '${widget.nivel.temas.length} temas',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: locked
+                                    ? const Color(0xFF9CA3AF)
+                                    : cardColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(
+                              3,
+                              (i) => Text(
+                                locked
+                                    ? '⬜'
+                                    : (i < (widget.index % 3 + 1) ? '⭐' : '☆'),
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // ── Completed badge ──────────────────────────────────────────
+            if (completed)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF059669),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Text('✓',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14)),
                   ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );

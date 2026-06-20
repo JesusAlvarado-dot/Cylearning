@@ -9,12 +9,17 @@ class AuthProvider with ChangeNotifier {
   bool _cargando = true;
   String _error = '';
   bool _registroExitoso = false;
+  ProgresoResumen _progreso = ProgresoResumen.empty();
 
   Usuario? get usuario => _usuario;
   bool get isAuthenticated => _isAuthenticated;
   bool get cargando => _cargando;
   String get error => _error;
   bool get registroExitoso => _registroExitoso;
+  ProgresoResumen get progreso => _progreso;
+
+  bool isLeccionCompletada(String id) => _progreso.leccionesCompletadas.contains(id);
+  bool isNivelCompletado(String id) => _progreso.nivelesCompletados.contains(id);
 
   AuthProvider() {
     _checkAuth();
@@ -64,10 +69,34 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  Future<void> loadProgreso() async {
+    try {
+      _progreso = await ApiService.getProgresoResumen();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> marcarLeccionCompleta(String leccionId, int porcentaje) async {
+    final ok = await ApiService.completarLeccion(leccionId, porcentaje);
+    if (ok) {
+      _progreso.leccionesCompletadas.add(leccionId);
+      notifyListeners();
+    }
+  }
+
+  Future<void> marcarNivelCompleto(String nivelId, int porcentaje) async {
+    final ok = await ApiService.completarNivel(nivelId, porcentaje);
+    if (ok) {
+      _progreso.nivelesCompletados.add(nivelId);
+      notifyListeners();
+    }
+  }
+
   Future<void> logout() async {
     await ApiService.logout();
     _usuario = null;
     _isAuthenticated = false;
+    _progreso = ProgresoResumen.empty();
     notifyListeners();
   }
 }

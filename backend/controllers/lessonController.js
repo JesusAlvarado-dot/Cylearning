@@ -247,7 +247,6 @@ exports.iniciarLeccion = async (req, res, next) => {
       leccion_id: id,
       activo: true,
     })
-      .select('-respuesta_correcta')
       .sort({ orden: 1 });
 
     return respuestaExito(

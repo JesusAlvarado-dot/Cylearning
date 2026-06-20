@@ -1,3 +1,25 @@
+class ProgresoResumen {
+  final Set<String> leccionesCompletadas;
+  final Set<String> nivelesCompletados;
+
+  ProgresoResumen({
+    required this.leccionesCompletadas,
+    required this.nivelesCompletados,
+  });
+
+  factory ProgresoResumen.fromJson(Map<String, dynamic> json) => ProgresoResumen(
+    leccionesCompletadas: Set<String>.from(
+        (json['lecciones_completadas'] as List? ?? []).map((e) => e.toString())),
+    nivelesCompletados: Set<String>.from(
+        (json['niveles_completados'] as List? ?? []).map((e) => e.toString())),
+  );
+
+  static ProgresoResumen empty() => ProgresoResumen(
+    leccionesCompletadas: {},
+    nivelesCompletados: {},
+  );
+}
+
 class Medalla {
   final String tipo;
   final String descripcion;

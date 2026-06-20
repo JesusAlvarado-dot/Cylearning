@@ -10,6 +10,7 @@ import './screens/niveles_screen.dart';
 import './screens/nivel_detail_screen.dart';
 import './screens/leccion_screen.dart';
 import './screens/ejercicios_screen.dart';
+import './screens/prueba_final_screen.dart';
 import './screens/perfil_screen.dart';
 import './screens/admin_screen.dart';
 import './models/models.dart';
@@ -102,30 +103,42 @@ class MyApp extends StatelessWidget {
                 ),
               );
             case '/login':
-              return MaterialPageRoute(builder: (_) => const LoginScreen());
+              return MaterialPageRoute(settings: settings, builder: (_) => const LoginScreen());
             case '/registro':
-              return MaterialPageRoute(builder: (_) => const RegistroScreen());
+              return MaterialPageRoute(settings: settings, builder: (_) => const RegistroScreen());
             case '/niveles':
-              return MaterialPageRoute(builder: (_) => const NivelesScreen());
+              return MaterialPageRoute(settings: settings, builder: (_) => const NivelesScreen());
             case '/nivel':
               final nivel = settings.arguments as Nivel;
               return MaterialPageRoute(
+                settings: settings,
                 builder: (_) => NivelDetailScreen(nivel: nivel),
               );
             case '/leccion':
               final leccion = settings.arguments as Leccion;
               return MaterialPageRoute(
+                settings: settings,
                 builder: (_) => LeccionScreen(leccion: leccion),
               );
             case '/ejercicios':
               final leccionId = settings.arguments as String?;
               return MaterialPageRoute(
+                settings: settings,
                 builder: (_) => EjerciciosScreen(leccionId: leccionId),
               );
+            case '/prueba-final':
+              final args = settings.arguments as Map<String, dynamic>;
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) => PruebaFinalScreen(
+                  nivel: args['nivel'] as Nivel,
+                  lecciones: args['lecciones'] as List<Leccion>,
+                ),
+              );
             case '/perfil':
-              return MaterialPageRoute(builder: (_) => const PerfilScreen());
+              return MaterialPageRoute(settings: settings, builder: (_) => const PerfilScreen());
             case '/admin':
-              return MaterialPageRoute(builder: (_) => const AdminScreen());
+              return MaterialPageRoute(settings: settings, builder: (_) => const AdminScreen());
             default:
               return MaterialPageRoute(
                 builder: (_) => const Scaffold(

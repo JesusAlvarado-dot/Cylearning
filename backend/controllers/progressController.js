@@ -1,8 +1,84 @@
 const StudentProgress = require('../models/StudentProgress');
 const ExerciseHistory = require('../models/ExerciseHistory');
 const Level = require('../models/Level');
+const Progreso = require('../models/Progreso');
 const { respuestaExito, respuestaError, respuestaPaginada, paginar } = require('../utils/helpers');
 const constants = require('../config/constants');
+
+// GET /api/student/progreso/resumen → {lecciones_completadas:[], niveles_completados:[]}
+exports.obtenerResumen = async (req, res, next) => {
+  try {
+    const estudianteId = req.usuarioId;
+    let progreso = await Progreso.findOne({ estudiante_id: estudianteId });
+    if (!progreso) {
+      progreso = await Progreso.create({
+        estudiante_id: estudianteId,
+        lecciones_completadas: [],
+        niveles_completados: [],
+      });
+    }
+    return respuestaExito(res, {
+      lecciones_completadas: progreso.lecciones_completadas.map(id => id.toString()),
+      niveles_completados:   progreso.niveles_completados.map(id => id.toString()),
+    }, 'Resumen obtenido');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/student/lecciones/:id/completar  body: { porcentaje }
+exports.completarLeccion = async (req, res, next) => {
+  try {
+    const estudianteId = req.usuarioId;
+    const leccionId    = req.params.id;
+    const porcentaje   = Number(req.body.porcentaje) || 0;
+
+    if (porcentaje < 70) {
+      return respuestaExito(res, { desbloqueado: false }, 'Necesitas al menos 70% para desbloquear el siguiente tema');
+    }
+
+    let progreso = await Progreso.findOne({ estudiante_id: estudianteId });
+    if (!progreso) {
+      progreso = await Progreso.create({ estudiante_id: estudianteId, lecciones_completadas: [], niveles_completados: [] });
+    }
+
+    if (!progreso.lecciones_completadas.some(id => id.toString() === leccionId)) {
+      progreso.lecciones_completadas.push(leccionId);
+      await progreso.save();
+    }
+
+    return respuestaExito(res, { desbloqueado: true }, 'Lección completada');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/student/niveles/:id/completar  body: { porcentaje }
+exports.completarNivel = async (req, res, next) => {
+  try {
+    const estudianteId = req.usuarioId;
+    const nivelId      = req.params.id;
+    const porcentaje   = Number(req.body.porcentaje) || 0;
+
+    if (porcentaje < 70) {
+      return respuestaExito(res, { desbloqueado: false }, 'Necesitas al menos 70% para desbloquear el siguiente nivel');
+    }
+
+    let progreso = await Progreso.findOne({ estudiante_id: estudianteId });
+    if (!progreso) {
+      progreso = await Progreso.create({ estudiante_id: estudianteId, lecciones_completadas: [], niveles_completados: [] });
+    }
+
+    if (!progreso.niveles_completados.some(id => id.toString() === nivelId)) {
+      progreso.niveles_completados.push(nivelId);
+      await progreso.save();
+    }
+
+    return respuestaExito(res, { desbloqueado: true }, 'Nivel completado');
+  } catch (error) {
+    next(error);
+  }
+};
 
 // Obtener progreso del estudiante en una lección
 exports.obtenerProgresoLeccion = async (req, res, next) => {
