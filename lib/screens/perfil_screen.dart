@@ -178,6 +178,10 @@ class _PerfilScreenState extends State<PerfilScreen>
                                 'Puntos', _kYellow),
                             Container(width: 1, height: 40,
                                 color: const Color(0xFFE5E7EB)),
+                            _StatCell('🔥', '${auth.racha}d',
+                                'Racha', const Color(0xFFE65100)),
+                            Container(width: 1, height: 40,
+                                color: const Color(0xFFE5E7EB)),
                             _StatCell(roleEmoji, roleLabel, 'Rol', accent),
                           ],
                         ),
@@ -220,7 +224,79 @@ class _PerfilScreenState extends State<PerfilScreen>
                         ),
                       ),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
+
+                      // ── Medallas ────────────────────────────────────────
+                      if (usuario.medallas.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: [BoxShadow(
+                              color: _kDark.withValues(alpha: 0.05),
+                              blurRadius: 16, offset: const Offset(0, 6))],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                Container(width: 4, height: 18,
+                                  decoration: BoxDecoration(
+                                    color: _kYellow,
+                                    borderRadius: BorderRadius.circular(2))),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '🏅 Mis medallas (${usuario.medallas.length})',
+                                  style: const TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.w800,
+                                    color: _kDark)),
+                              ]),
+                              const SizedBox(height: 14),
+                              Wrap(
+                                spacing: 8, runSpacing: 8,
+                                children: usuario.medallas.map((m) =>
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFFF9F2),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color: _kYellow.withValues(alpha: 0.5),
+                                          width: 1.5),
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(m.emoji,
+                                            style: const TextStyle(fontSize: 22)),
+                                        const SizedBox(height: 4),
+                                        SizedBox(
+                                          width: 80,
+                                          child: Text(
+                                            m.descripcion,
+                                            textAlign: TextAlign.center,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w600,
+                                              color: _kMuted),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ).toList(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
+                      const SizedBox(height: 4),
 
                       // ── Logout button ───────────────────────────────────
                       GestureDetector(

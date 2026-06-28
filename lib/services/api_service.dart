@@ -187,7 +187,7 @@ class ApiService {
     throw Exception('Error al cargar progreso');
   }
 
-  static Future<bool> completarLeccion(String leccionId, int porcentaje) async {
+  static Future<Map<String, dynamic>> completarLeccion(String leccionId, int porcentaje) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/student/lecciones/$leccionId/completar'),
@@ -195,14 +195,13 @@ class ApiService {
         body: jsonEncode({'porcentaje': porcentaje}),
       );
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['datos']['desbloqueado'] == true;
+        return jsonDecode(response.body)['datos'] as Map<String, dynamic>;
       }
     } catch (_) {}
-    return false;
+    return {'desbloqueado': false};
   }
 
-  static Future<bool> completarNivel(String nivelId, int porcentaje) async {
+  static Future<Map<String, dynamic>> completarNivel(String nivelId, int porcentaje) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/student/niveles/$nivelId/completar'),
@@ -210,11 +209,23 @@ class ApiService {
         body: jsonEncode({'porcentaje': porcentaje}),
       );
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['datos']['desbloqueado'] == true;
+        return jsonDecode(response.body)['datos'] as Map<String, dynamic>;
       }
     } catch (_) {}
-    return false;
+    return {'desbloqueado': false};
+  }
+
+  static Future<List<EstudianteRanking>> getRanking() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/student/ranking'),
+      headers: _headers,
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final List<dynamic> lista = data['datos'] as List? ?? [];
+      return lista.map((e) => EstudianteRanking.fromJson(e)).toList();
+    }
+    throw Exception('Error al cargar el ranking');
   }
 
   // ADMIN ENDPOINTS

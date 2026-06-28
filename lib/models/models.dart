@@ -47,6 +47,7 @@ class EstudianteRanking {
   final String nombre;
   final String email;
   final int puntosTotales;
+  final int racha;
   final List<Medalla> medallas;
 
   const EstudianteRanking({
@@ -54,6 +55,7 @@ class EstudianteRanking {
     required this.nombre,
     required this.email,
     required this.puntosTotales,
+    this.racha = 0,
     required this.medallas,
   });
 
@@ -63,6 +65,7 @@ class EstudianteRanking {
       nombre: json['nombre'] ?? '',
       email: json['email'] ?? '',
       puntosTotales: json['puntos_totales'] as int? ?? 0,
+      racha: json['racha'] as int? ?? 0,
       medallas: (json['medallas'] as List? ?? [])
           .map((m) => Medalla.fromJson(m))
           .toList(),
@@ -77,6 +80,7 @@ class Usuario {
   final String rol;
   final DateTime fechaRegistro;
   final int puntosTotales;
+  final int racha;
   final List<Medalla> medallas;
 
   const Usuario({
@@ -86,6 +90,7 @@ class Usuario {
     required this.rol,
     required this.fechaRegistro,
     this.puntosTotales = 0,
+    this.racha = 0,
     this.medallas = const [],
   });
 
@@ -99,6 +104,7 @@ class Usuario {
               json['fechaRegistro'] ?? json['createdAt'] ?? '') ??
           DateTime.now(),
       puntosTotales: json['puntos_totales'] as int? ?? 0,
+      racha: json['racha'] as int? ?? 0,
       medallas: (json['medallas'] as List? ?? [])
           .map((m) => Medalla.fromJson(m))
           .toList(),

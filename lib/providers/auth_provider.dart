@@ -10,6 +10,7 @@ class AuthProvider with ChangeNotifier {
   String _error = '';
   bool _registroExitoso = false;
   ProgresoResumen _progreso = ProgresoResumen.empty();
+  int _racha = 0;
 
   Usuario? get usuario => _usuario;
   bool get isAuthenticated => _isAuthenticated;
@@ -17,6 +18,7 @@ class AuthProvider with ChangeNotifier {
   String get error => _error;
   bool get registroExitoso => _registroExitoso;
   ProgresoResumen get progreso => _progreso;
+  int get racha => _racha;
 
   bool isLeccionCompletada(String id) => _progreso.leccionesCompletadas.contains(id);
   bool isNivelCompletado(String id) => _progreso.nivelesCompletados.contains(id);
@@ -76,20 +78,24 @@ class AuthProvider with ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> marcarLeccionCompleta(String leccionId, int porcentaje) async {
-    final ok = await ApiService.completarLeccion(leccionId, porcentaje);
-    if (ok) {
+  Future<Map<String, dynamic>> marcarLeccionCompleta(String leccionId, int porcentaje) async {
+    final result = await ApiService.completarLeccion(leccionId, porcentaje);
+    if (result['desbloqueado'] == true) {
       _progreso.leccionesCompletadas.add(leccionId);
+      _racha = result['racha'] as int? ?? _racha;
       notifyListeners();
     }
+    return result;
   }
 
-  Future<void> marcarNivelCompleto(String nivelId, int porcentaje) async {
-    final ok = await ApiService.completarNivel(nivelId, porcentaje);
-    if (ok) {
+  Future<Map<String, dynamic>> marcarNivelCompleto(String nivelId, int porcentaje) async {
+    final result = await ApiService.completarNivel(nivelId, porcentaje);
+    if (result['desbloqueado'] == true) {
       _progreso.nivelesCompletados.add(nivelId);
+      _racha = result['racha'] as int? ?? _racha;
       notifyListeners();
     }
+    return result;
   }
 
   Future<void> logout() async {

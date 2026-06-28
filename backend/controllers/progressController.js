@@ -2,8 +2,37 @@ const StudentProgress = require('../models/StudentProgress');
 const ExerciseHistory = require('../models/ExerciseHistory');
 const Level = require('../models/Level');
 const Progreso = require('../models/Progreso');
+const User = require('../models/User');
 const { respuestaExito, respuestaError, respuestaPaginada, paginar } = require('../utils/helpers');
 const constants = require('../config/constants');
+
+// ─── Helpers privados ────────────────────────────────────────────────────────
+
+function _updateStreak(user) {
+  const now = new Date();
+  const hoy = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (!user.ultima_actividad) {
+    user.racha = 1;
+  } else {
+    const ultimo = new Date(
+      user.ultima_actividad.getFullYear(),
+      user.ultima_actividad.getMonth(),
+      user.ultima_actividad.getDate()
+    );
+    const diffDias = Math.round((hoy - ultimo) / 86400000);
+    if (diffDias === 0) { /* mismo día, sin cambio */ }
+    else if (diffDias === 1) { user.racha = (user.racha || 0) + 1; }
+    else { user.racha = 1; }
+  }
+  user.ultima_actividad = now;
+}
+
+function _medallaRacha(racha) {
+  if (racha === 3)  return { tipo: 'estrella', descripcion: '¡3 días de racha seguidos! 🔥' };
+  if (racha === 7)  return { tipo: 'estrella', descripcion: '¡Una semana aprendiendo! 🌟' };
+  if (racha === 30) return { tipo: 'oro',      descripcion: '¡30 días de racha! ¡Increíble! 🏆' };
+  return null;
+}
 
 // GET /api/student/progreso/resumen → {lecciones_completadas:[], niveles_completados:[]}
 exports.obtenerResumen = async (req, res, next) => {
@@ -37,17 +66,39 @@ exports.completarLeccion = async (req, res, next) => {
       return respuestaExito(res, { desbloqueado: false }, 'Necesitas al menos 70% para desbloquear el siguiente tema');
     }
 
+    const usuario = await User.findById(estudianteId);
+    const rachaAntes = usuario.racha || 0;
+    _updateStreak(usuario);
+
     let progreso = await Progreso.findOne({ estudiante_id: estudianteId });
     if (!progreso) {
       progreso = await Progreso.create({ estudiante_id: estudianteId, lecciones_completadas: [], niveles_completados: [] });
     }
 
+    let puntos_ganados = 0;
+    let medalla_racha = null;
+
     if (!progreso.lecciones_completadas.some(id => id.toString() === leccionId)) {
+      puntos_ganados = porcentaje; // 70-100 pts por lección
+      usuario.puntos_totales = (usuario.puntos_totales || 0) + puntos_ganados;
       progreso.lecciones_completadas.push(leccionId);
       await progreso.save();
+
+      // Medalla por racha si cambió
+      if (usuario.racha !== rachaAntes) {
+        medalla_racha = _medallaRacha(usuario.racha);
+        if (medalla_racha) usuario.medallas.push(medalla_racha);
+      }
     }
 
-    return respuestaExito(res, { desbloqueado: true }, 'Lección completada');
+    await usuario.save();
+
+    return respuestaExito(res, {
+      desbloqueado: true,
+      puntos_ganados,
+      racha: usuario.racha,
+      medalla: medalla_racha,
+    }, 'Lección completada');
   } catch (error) {
     next(error);
   }
@@ -64,17 +115,53 @@ exports.completarNivel = async (req, res, next) => {
       return respuestaExito(res, { desbloqueado: false }, 'Necesitas al menos 70% para desbloquear el siguiente nivel');
     }
 
+    const usuario = await User.findById(estudianteId);
+    const rachaAntes = usuario.racha || 0;
+    _updateStreak(usuario);
+
     let progreso = await Progreso.findOne({ estudiante_id: estudianteId });
     if (!progreso) {
       progreso = await Progreso.create({ estudiante_id: estudianteId, lecciones_completadas: [], niveles_completados: [] });
     }
 
+    let puntos_ganados = 0;
+    let medalla = null;
+
     if (!progreso.niveles_completados.some(id => id.toString() === nivelId)) {
+      puntos_ganados = Math.round(porcentaje * 1.5); // 105-150 pts por prueba final
+      usuario.puntos_totales = (usuario.puntos_totales || 0) + puntos_ganados;
+
+      // Medalla según puntaje
+      const tipoMedalla = porcentaje === 100 ? 'oro' : porcentaje >= 85 ? 'plata' : 'bronce';
+      const descMedalla  = porcentaje === 100
+        ? '¡Perfecto! 100% en la prueba final 🥇'
+        : porcentaje >= 85
+          ? `¡Excelente! ${porcentaje}% en la prueba final 🥈`
+          : `Nivel superado con ${porcentaje}% 🥉`;
+      usuario.medallas.push({ tipo: tipoMedalla, descripcion: descMedalla });
+      medalla = { tipo: tipoMedalla, descripcion: descMedalla };
+
       progreso.niveles_completados.push(nivelId);
       await progreso.save();
     }
 
-    return respuestaExito(res, { desbloqueado: true }, 'Nivel completado');
+    // Medalla de racha si aplica
+    if (usuario.racha !== rachaAntes) {
+      const mRacha = _medallaRacha(usuario.racha);
+      if (mRacha) {
+        usuario.medallas.push(mRacha);
+        if (!medalla) medalla = mRacha;
+      }
+    }
+
+    await usuario.save();
+
+    return respuestaExito(res, {
+      desbloqueado: true,
+      puntos_ganados,
+      racha: usuario.racha,
+      medalla,
+    }, 'Nivel completado');
   } catch (error) {
     next(error);
   }
@@ -275,6 +362,19 @@ exports.obtenerEstadisticasEstudiante = async (req, res, next) => {
       },
       'Estadísticas obtenidas exitosamente'
     );
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/student/ranking — top 20 estudiantes por puntos (público para estudiantes)
+exports.obtenerRankingPublico = async (req, res, next) => {
+  try {
+    const top = await User.find({ rol: 'student', activo: true })
+      .select('nombre puntos_totales medallas racha')
+      .sort({ puntos_totales: -1 })
+      .limit(20);
+    return respuestaExito(res, top, 'Ranking obtenido');
   } catch (error) {
     next(error);
   }

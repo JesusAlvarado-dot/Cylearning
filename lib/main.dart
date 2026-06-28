@@ -13,6 +13,7 @@ import './screens/ejercicios_screen.dart';
 import './screens/prueba_final_screen.dart';
 import './screens/perfil_screen.dart';
 import './screens/admin_screen.dart';
+import './screens/ranking_screen.dart';
 import './models/models.dart';
 
 void main() async {
@@ -139,6 +140,8 @@ class MyApp extends StatelessWidget {
               return MaterialPageRoute(settings: settings, builder: (_) => const PerfilScreen());
             case '/admin':
               return MaterialPageRoute(settings: settings, builder: (_) => const AdminScreen());
+            case '/ranking':
+              return MaterialPageRoute(settings: settings, builder: (_) => const RankingScreen());
             default:
               return MaterialPageRoute(
                 builder: (_) => const Scaffold(

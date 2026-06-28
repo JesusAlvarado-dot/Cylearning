@@ -72,6 +72,7 @@ class _NivelesScreenState extends State<NivelesScreen>
               auth.usuario?.nombre.split(' ').first ?? 'Explorador';
           final puntos = auth.usuario?.puntosTotales ?? 0;
           final medallas = auth.usuario?.medallas.length ?? 0;
+          final racha = auth.racha;
 
           return CustomScrollView(
             slivers: [
@@ -81,6 +82,7 @@ class _NivelesScreenState extends State<NivelesScreen>
                   nombre: nombre,
                   puntos: puntos,
                   medallas: medallas,
+                  racha: racha,
                   auth: auth,
                   waveAnim: _waveAnim,
                 ),
@@ -199,6 +201,7 @@ class _Header extends StatelessWidget {
   final String nombre;
   final int puntos;
   final int medallas;
+  final int racha;
   final AuthProvider auth;
   final Animation<double> waveAnim;
 
@@ -206,6 +209,7 @@ class _Header extends StatelessWidget {
     required this.nombre,
     required this.puntos,
     required this.medallas,
+    required this.racha,
     required this.auth,
     required this.waveAnim,
   });
@@ -304,6 +308,13 @@ class _Header extends StatelessWidget {
                                 emoji: '🏅', label: '$medallas',
                                 color: const Color(0xFFEFEBFF),
                                 textColor: const Color(0xFF5B21B6)),
+                            if (racha > 0) ...[
+                              const SizedBox(width: 8),
+                              _StatPill(
+                                  emoji: '🔥', label: '${racha}d',
+                                  color: const Color(0xFFFFF3E0),
+                                  textColor: const Color(0xFFE65100)),
+                            ],
                           ],
                         ),
                       ],
@@ -347,6 +358,15 @@ class _Header extends StatelessWidget {
                           Text('Mi perfil'),
                         ]),
                       ),
+                      const PopupMenuItem(
+                        value: 'ranking',
+                        child: Row(children: [
+                          Icon(Icons.leaderboard_rounded,
+                              color: Color(0xFFFFB800)),
+                          SizedBox(width: 10),
+                          Text('🏆 Ranking'),
+                        ]),
+                      ),
                       if (auth.usuario?.rol == 'admin')
                         const PopupMenuItem(
                           value: 'admin',
@@ -372,6 +392,8 @@ class _Header extends StatelessWidget {
                       switch (v) {
                         case 'perfil':
                           Navigator.of(context).pushNamed('/perfil');
+                        case 'ranking':
+                          Navigator.of(context).pushNamed('/ranking');
                         case 'admin':
                           Navigator.of(context).pushNamed('/admin');
                         case 'logout':

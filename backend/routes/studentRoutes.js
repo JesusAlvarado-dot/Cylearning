@@ -55,4 +55,7 @@ router.get('/progreso/leccion/:leccionId', progressController.obtenerProgresoLec
 // Obtener progreso general del estudiante
 router.get('/progreso', progressController.obtenerProgresoGeneral);
 
+// Ranking público de estudiantes (top 20 por puntos)
+router.get('/ranking', progressController.obtenerRankingPublico);
+
 module.exports = router;

@@ -49,6 +49,14 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    racha: {
+      type: Number,
+      default: 0,
+    },
+    ultima_actividad: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

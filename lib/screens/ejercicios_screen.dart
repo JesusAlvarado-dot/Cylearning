@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../models/models.dart';
+import '../widgets/celebration_overlay.dart';
 
 const _kBg     = Color(0xFFFFF9F2);
 const _kDark   = Color(0xFF1C1140);
@@ -141,32 +142,38 @@ class _EjerciciosScreenState extends State<EjerciciosScreen>
           }
 
           if (_finished) {
+            final total = ejercicios.length;
+            final pct = total > 0 ? _score / total : 0.0;
             if (!_progressSaved && widget.leccionId != null) {
               _progressSaved = true;
-              final total = ejercicios.length;
-              final pct = total > 0 ? (_score * 100 ~/ total) : 0;
+              final pctInt = (pct * 100).round();
               WidgetsBinding.instance.addPostFrameCallback((_) async {
                 if (!mounted) return;
                 await context.read<AuthProvider>()
-                    .marcarLeccionCompleta(widget.leccionId!, pct);
+                    .marcarLeccionCompleta(widget.leccionId!, pctInt);
               });
             }
-            return _ResultView(
-              score: _score,
-              total: ejercicios.length,
-              onReplay: () => setState(() {
-                _currentIndex = 0;
-                _selectedOption = null;
-                _answered = false;
-                _isCorrect = false;
-                _score = 0;
-                _finished = false;
-                _progressSaved = false;
-                _feedbackCtrl.reset();
-              }),
-              onBack: () => Navigator.of(context).pop(),
-              onNext: () => Navigator.of(context)
-                  .popUntil(ModalRoute.withName('/nivel')),
+            return Stack(
+              children: [
+                _ResultView(
+                  score: _score,
+                  total: total,
+                  onReplay: () => setState(() {
+                    _currentIndex = 0;
+                    _selectedOption = null;
+                    _answered = false;
+                    _isCorrect = false;
+                    _score = 0;
+                    _finished = false;
+                    _progressSaved = false;
+                    _feedbackCtrl.reset();
+                  }),
+                  onBack: () => Navigator.of(context).pop(),
+                  onNext: () => Navigator.of(context)
+                      .popUntil(ModalRoute.withName('/nivel')),
+                ),
+                CelebrationOverlay(show: pct >= 0.7),
+              ],
             );
           }
 
