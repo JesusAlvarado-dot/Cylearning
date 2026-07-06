@@ -1,7 +1,9 @@
 const Lesson = require('../models/Lesson');
 const Topic = require('../models/Topic');
 const Exercise = require('../models/Exercise');
+const ExerciseHistory = require('../models/ExerciseHistory');
 const StudentProgress = require('../models/StudentProgress');
+const Progreso = require('../models/Progreso');
 const { respuestaExito, respuestaError, respuestaPaginada, paginar, ocultarRespuesta } = require('../utils/helpers');
 const constants = require('../config/constants');
 const Log = require('../models/Log');
@@ -162,23 +164,12 @@ exports.actualizarLeccion = async (req, res, next) => {
   }
 };
 
-// Eliminar lección (solo admin)
+// Eliminar lección (solo admin) — borrado en cascada de sus ejercicios
 exports.eliminarLeccion = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Verificar que no tenga ejercicios
-    const ejercicios = await Exercise.countDocuments({ leccion_id: id });
-    if (ejercicios > 0) {
-      return respuestaError(
-        res,
-        'No se puede eliminar una lección que tiene ejercicios asociados',
-        400
-      );
-    }
-
-    const leccion = await Lesson.findByIdAndDelete(id);
-
+    const leccion = await Lesson.findById(id);
     if (!leccion) {
       return respuestaError(
         res,
@@ -187,19 +178,29 @@ exports.eliminarLeccion = async (req, res, next) => {
       );
     }
 
+    // Borrar en cascada: ejercicios, historial y progreso relacionado
+    const ejercicios = await Exercise.deleteMany({ leccion_id: id });
+    await ExerciseHistory.deleteMany({ leccion_id: id });
+    await StudentProgress.deleteMany({ leccion_id: id });
+    await Progreso.updateMany(
+      {},
+      { $pull: { lecciones_completadas: leccion._id } }
+    );
+    await leccion.deleteOne();
+
     // Registrar en logs
     await Log.create({
       tipo: 'eliminado',
       usuario_id: req.usuarioId,
-      descripcion: `Lección eliminada: ${leccion.nombre}`,
+      descripcion: `Lección eliminada en cascada: ${leccion.nombre} (${ejercicios.deletedCount} ejercicios)`,
       entidad_tipo: 'lesson',
       entidad_id: leccion._id,
     });
 
     return respuestaExito(
       res,
-      {},
-      'Lección eliminada exitosamente'
+      { ejercicios_eliminados: ejercicios.deletedCount },
+      'Lección y sus ejercicios eliminados exitosamente'
     );
   } catch (error) {
     next(error);

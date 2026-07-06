@@ -737,7 +737,9 @@ class _ContenidoTabState extends State<_ContenidoTab> {
     final ok = await _dlgConfirmar(
       context,
       'Eliminar "${nv.nombre}"',
-      '¿Eliminar ${nv.nombre}? Esta acción no se puede deshacer.',
+      '⚠️ Se borrará el nivel COMPLETO: todos sus temas, lecciones y '
+      'ejercicios, junto con el progreso de los estudiantes en este nivel. '
+      'Esta acción no se puede deshacer.',
     );
     if (!ok || !mounted) return;
     try {
@@ -830,7 +832,9 @@ class _ContenidoTabState extends State<_ContenidoTab> {
     final ok = await _dlgConfirmar(
       context,
       'Eliminar "$nombre"',
-      '¿Eliminar $nombre? Esta acción no se puede deshacer.',
+      '⚠️ Se borrará el tema COMPLETO: todas sus lecciones y ejercicios, '
+      'junto con el progreso de los estudiantes en ellas. '
+      'Esta acción no se puede deshacer.',
     );
     if (!ok || !mounted) return;
     try {
@@ -936,7 +940,9 @@ class _ContenidoTabState extends State<_ContenidoTab> {
     final ok = await _dlgConfirmar(
       context,
       'Eliminar "$nombre"',
-      '¿Eliminar $nombre? Esta acción no se puede deshacer.',
+      '⚠️ Se borrará la lección con TODOS sus ejercicios, junto con el '
+      'progreso de los estudiantes en ella. '
+      'Esta acción no se puede deshacer.',
     );
     if (!ok || !mounted) return;
     try {

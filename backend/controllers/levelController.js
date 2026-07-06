@@ -1,6 +1,10 @@
 const Level = require('../models/Level');
 const Topic = require('../models/Topic');
 const Lesson = require('../models/Lesson');
+const Exercise = require('../models/Exercise');
+const ExerciseHistory = require('../models/ExerciseHistory');
+const StudentProgress = require('../models/StudentProgress');
+const Progreso = require('../models/Progreso');
 const { respuestaExito, respuestaError, respuestaPaginada, paginar } = require('../utils/helpers');
 const constants = require('../config/constants');
 const Log = require('../models/Log');
@@ -160,23 +164,12 @@ exports.actualizarNivel = async (req, res, next) => {
   }
 };
 
-// Eliminar nivel (solo admin)
+// Eliminar nivel (solo admin) — borrado en cascada de todo su contenido
 exports.eliminarNivel = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Verificar que no tenga temas
-    const temas = await Topic.countDocuments({ nivel_id: id });
-    if (temas > 0) {
-      return respuestaError(
-        res,
-        'No se puede eliminar un nivel que tiene temas asociados',
-        400
-      );
-    }
-
-    const nivel = await Level.findByIdAndDelete(id);
-
+    const nivel = await Level.findById(id);
     if (!nivel) {
       return respuestaError(
         res,
@@ -185,19 +178,41 @@ exports.eliminarNivel = async (req, res, next) => {
       );
     }
 
+    // Recolectar todo el contenido anidado
+    const temas = await Topic.find({ nivel_id: id }).select('_id');
+    const temaIds = temas.map((t) => t._id);
+    const lecciones = await Lesson.find({ tema_id: { $in: temaIds } }).select('_id');
+    const leccionIds = lecciones.map((l) => l._id);
+
+    // Borrar en cascada: ejercicios, historial y progreso relacionado
+    const ejercicios = await Exercise.deleteMany({ leccion_id: { $in: leccionIds } });
+    await ExerciseHistory.deleteMany({ leccion_id: { $in: leccionIds } });
+    await StudentProgress.deleteMany({ nivel_id: id });
+    await Progreso.updateMany(
+      {},
+      { $pull: { lecciones_completadas: { $in: leccionIds }, niveles_completados: nivel._id } }
+    );
+    await Lesson.deleteMany({ tema_id: { $in: temaIds } });
+    await Topic.deleteMany({ nivel_id: id });
+    await nivel.deleteOne();
+
     // Registrar en logs
     await Log.create({
       tipo: constants.LOG_TYPES.LEVEL_DELETED,
       usuario_id: req.usuarioId,
-      descripcion: `Nivel eliminado: ${nivel.nombre}`,
+      descripcion: `Nivel eliminado en cascada: ${nivel.nombre} (${temaIds.length} temas, ${leccionIds.length} lecciones, ${ejercicios.deletedCount} ejercicios)`,
       entidad_tipo: 'level',
       entidad_id: nivel._id,
     });
 
     return respuestaExito(
       res,
-      {},
-      'Nivel eliminado exitosamente'
+      {
+        temas_eliminados: temaIds.length,
+        lecciones_eliminadas: leccionIds.length,
+        ejercicios_eliminados: ejercicios.deletedCount,
+      },
+      'Nivel y todo su contenido eliminados exitosamente'
     );
   } catch (error) {
     next(error);

@@ -1,6 +1,10 @@
 const Topic = require('../models/Topic');
 const Level = require('../models/Level');
 const Lesson = require('../models/Lesson');
+const Exercise = require('../models/Exercise');
+const ExerciseHistory = require('../models/ExerciseHistory');
+const StudentProgress = require('../models/StudentProgress');
+const Progreso = require('../models/Progreso');
 const { respuestaExito, respuestaError, respuestaPaginada, paginar } = require('../utils/helpers');
 const constants = require('../config/constants');
 const Log = require('../models/Log');
@@ -146,23 +150,12 @@ exports.actualizarTema = async (req, res, next) => {
   }
 };
 
-// Eliminar tema (solo admin)
+// Eliminar tema (solo admin) — borrado en cascada de lecciones y ejercicios
 exports.eliminarTema = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Verificar que no tenga lecciones
-    const lecciones = await Lesson.countDocuments({ tema_id: id });
-    if (lecciones > 0) {
-      return respuestaError(
-        res,
-        'No se puede eliminar un tema que tiene lecciones asociadas',
-        400
-      );
-    }
-
-    const tema = await Topic.findByIdAndDelete(id);
-
+    const tema = await Topic.findById(id);
     if (!tema) {
       return respuestaError(
         res,
@@ -171,19 +164,36 @@ exports.eliminarTema = async (req, res, next) => {
       );
     }
 
+    const lecciones = await Lesson.find({ tema_id: id }).select('_id');
+    const leccionIds = lecciones.map((l) => l._id);
+
+    // Borrar en cascada: ejercicios, historial y progreso relacionado
+    const ejercicios = await Exercise.deleteMany({ leccion_id: { $in: leccionIds } });
+    await ExerciseHistory.deleteMany({ leccion_id: { $in: leccionIds } });
+    await StudentProgress.deleteMany({ tema_id: id });
+    await Progreso.updateMany(
+      {},
+      { $pull: { lecciones_completadas: { $in: leccionIds } } }
+    );
+    await Lesson.deleteMany({ tema_id: id });
+    await tema.deleteOne();
+
     // Registrar en logs
     await Log.create({
       tipo: 'eliminado',
       usuario_id: req.usuarioId,
-      descripcion: `Tema eliminado: ${tema.nombre}`,
+      descripcion: `Tema eliminado en cascada: ${tema.nombre} (${leccionIds.length} lecciones, ${ejercicios.deletedCount} ejercicios)`,
       entidad_tipo: 'topic',
       entidad_id: tema._id,
     });
 
     return respuestaExito(
       res,
-      {},
-      'Tema eliminado exitosamente'
+      {
+        lecciones_eliminadas: leccionIds.length,
+        ejercicios_eliminados: ejercicios.deletedCount,
+      },
+      'Tema y todo su contenido eliminados exitosamente'
     );
   } catch (error) {
     next(error);
