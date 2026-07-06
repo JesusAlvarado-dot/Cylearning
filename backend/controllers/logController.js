@@ -148,7 +148,11 @@ exports.obtenerEstadisticasLogs = async (req, res, next) => {
 // Limpiar logs antiguos (admin)
 exports.limpiarLogsAntiguos = async (req, res, next) => {
   try {
-    const { dias = 30 } = req.body;
+    // Validar dias: un valor negativo o no numérico borraría todos los logs
+    const dias = parseInt(req.body.dias, 10) || 30;
+    if (dias < 1) {
+      return respuestaError(res, 'El número de días debe ser al menos 1', 400);
+    }
 
     // Calcular fecha
     const fecha = new Date();

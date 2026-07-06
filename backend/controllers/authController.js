@@ -62,8 +62,8 @@ exports.login = async (req, res, next) => {
   try {
     const { email, contrasena } = req.body;
 
-    // Validar que los campos existan
-    if (!email || !contrasena) {
+    // Validar que los campos existan y sean strings (evita inyección NoSQL)
+    if (!email || !contrasena || typeof email !== 'string' || typeof contrasena !== 'string') {
       return respuestaError(
         res,
         'Email y contraseña son requeridos',

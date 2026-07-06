@@ -58,6 +58,8 @@ const logSchema = new mongoose.Schema(
 logSchema.index({ usuario_id: 1 });
 logSchema.index({ tipo: 1 });
 logSchema.index({ createdAt: -1 });
+// TTL: MongoDB borra automáticamente los logs con más de 90 días
+logSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 90 });
 logSchema.index({ entidad_tipo: 1, entidad_id: 1 });
 
 module.exports = mongoose.model('Log', logSchema);

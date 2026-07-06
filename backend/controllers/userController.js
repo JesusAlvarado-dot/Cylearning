@@ -182,6 +182,48 @@ exports.obtenerPerfilEstudiante = async (req, res, next) => {
   }
 };
 
+// Crear usuario (admin) — permite elegir rol
+exports.crearUsuarioAdmin = async (req, res, next) => {
+  try {
+    const { nombre, email, contrasena, rol } = req.body;
+
+    if (rol && !Object.values(constants.ROLES).includes(rol)) {
+      return respuestaError(res, 'Rol inválido', 400);
+    }
+
+    const usuarioExistente = await User.findOne({ email });
+    if (usuarioExistente) {
+      return respuestaError(res, constants.ERROR_MESSAGES.USER_EXISTS, 400);
+    }
+
+    const usuario = new User({
+      nombre,
+      email,
+      contrasena,
+      rol: rol || constants.ROLES.STUDENT,
+    });
+
+    await usuario.save();
+
+    await Log.create({
+      tipo: constants.LOG_TYPES.USER_CREATED,
+      usuario_id: req.usuarioId,
+      descripcion: `Usuario creado por admin: ${usuario.nombre}`,
+      entidad_tipo: 'user',
+      entidad_id: usuario._id,
+    });
+
+    return respuestaExito(
+      res,
+      usuario.toJSON(),
+      constants.SUCCESS_MESSAGES.USER_CREATED,
+      201
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Obtener estudiantes (admin) con ordenamiento por puntos
 exports.obtenerEstudiantesAdmin = async (req, res, next) => {
   try {
@@ -238,11 +280,24 @@ exports.cambiarContrasena = async (req, res, next) => {
     const { contraseniaActual, contrasenioNueva } = req.body;
     const usuarioId = req.usuarioId;
 
-    // Validar que los campos existan
-    if (!contraseniaActual || !contrasenioNueva) {
+    // Validar que los campos existan y sean strings
+    if (
+      !contraseniaActual ||
+      !contrasenioNueva ||
+      typeof contraseniaActual !== 'string' ||
+      typeof contrasenioNueva !== 'string'
+    ) {
       return respuestaError(
         res,
         'Las contraseñas actual y nueva son requeridas',
+        400
+      );
+    }
+
+    if (contrasenioNueva.length < 6) {
+      return respuestaError(
+        res,
+        'La nueva contraseña debe tener al menos 6 caracteres',
         400
       );
     }

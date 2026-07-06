@@ -9,12 +9,28 @@ const logController = require('../controllers/logController');
 const userController = require('../controllers/userController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const { requiereAdmin } = require('../middlewares/roleMiddleware');
+const {
+  validarEmail,
+  validarContrasena,
+  validarNombre,
+  verificarValidacion,
+} = require('../utils/validators');
 
 // Middleware de autenticación y admin para todas las rutas
 router.use(authMiddleware, requiereAdmin);
 
 // ============== USUARIOS ==============
 router.get('/usuarios', userController.obtenerEstudiantesAdmin);
+router.post(
+  '/usuarios',
+  validarNombre,
+  validarEmail,
+  validarContrasena,
+  verificarValidacion,
+  userController.crearUsuarioAdmin
+);
+router.put('/usuarios/:id', userController.actualizarUsuario);
+router.delete('/usuarios/:id', userController.eliminarUsuario);
 router.post('/usuarios/:id/medalla', userController.darMedalla);
 
 // ============== NIVELES ==============

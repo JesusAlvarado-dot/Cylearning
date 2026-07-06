@@ -1,4 +1,5 @@
 const constants = require('../config/constants');
+const environment = require('../config/environment');
 const { respuestaError } = require('../utils/helpers');
 const Log = require('../models/Log');
 
@@ -53,8 +54,18 @@ const errorHandler = async (err, req, res, next) => {
     });
   }
 
-  // Respuesta de error
-  return respuestaError(res, mensaje, status);
+  // IDs mal formados de Mongoose (evita responder 500 por un ObjectId inválido)
+  if (err.name === 'CastError') {
+    return respuestaError(res, 'Identificador inválido', 400);
+  }
+
+  // En producción no exponer mensajes internos de errores 500
+  const esProduccion = environment.server.nodeEnv === 'production';
+  const mensajeFinal = status >= 500 && esProduccion
+    ? constants.ERROR_MESSAGES.INTERNAL_ERROR
+    : mensaje;
+
+  return respuestaError(res, mensajeFinal, status);
 };
 
 // Middleware 404 (ruta no encontrada)

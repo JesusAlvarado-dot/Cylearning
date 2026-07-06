@@ -1,5 +1,13 @@
 require('dotenv').config();
 
+// En producción el JWT_SECRET es obligatorio; en desarrollo se avisa si falta
+if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET es obligatorio en producción. Configúralo en el archivo .env');
+  }
+  console.warn('⚠️  JWT_SECRET no configurado: usando valor por defecto SOLO para desarrollo');
+}
+
 module.exports = {
   // Database
   mongodb: {
@@ -9,7 +17,7 @@ module.exports = {
 
   // JWT
   jwt: {
-    secret: process.env.JWT_SECRET || 'tu_secret_key_muy_seguro_cambiar_en_produccion',
+    secret: process.env.JWT_SECRET || 'secret_solo_para_desarrollo_local',
     expiresIn: process.env.JWT_EXPIRE || '7d',
   },
 

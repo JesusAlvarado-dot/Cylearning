@@ -5,6 +5,9 @@ const environment = require('./config/environment');
 const PORT = environment.server.port;
 const NODE_ENV = environment.server.nodeEnv;
 
+// Ocultar credenciales de la URI al mostrarla en consola
+const dbHost = environment.mongodb.uri.replace(/\/\/[^@]+@/, '//***:***@');
+
 // Conectar a la base de datos
 connectDB();
 
@@ -17,7 +20,7 @@ const server = app.listen(PORT, () => {
 ║                                                            ║
 ║  Servidor corriendo en: http://localhost:${PORT}         ║
 ║  Entorno: ${NODE_ENV}                                      ║
-║  Base de datos: ${environment.mongodb.uri}                ║
+║  Base de datos: ${dbHost}                ║
 ║                                                            ║
 ╚════════════════════════════════════════════════════════════╝
   `);

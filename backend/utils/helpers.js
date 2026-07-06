@@ -55,14 +55,23 @@ const obtenerIP = (req) => {
   return (
     req.headers['x-forwarded-for']?.split(',')[0] ||
     req.headers['x-real-ip'] ||
-    req.connection.remoteAddress ||
+    req.socket?.remoteAddress ||
     'desconocida'
   );
 };
 
 // Normalizar resultado de respuesta
-const normalizarRespuesta = (respuesta, respuestaCorrecta) => {
-  return respuesta.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const normalizarRespuesta = (respuesta) => {
+  return String(respuesta ?? '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+};
+
+// Quitar la respuesta correcta y la explicación de un ejercicio
+// antes de enviarlo a un estudiante (la calificación es del servidor)
+const ocultarRespuesta = (ejercicio) => {
+  const obj = ejercicio.toObject ? ejercicio.toObject() : { ...ejercicio };
+  delete obj.respuesta_correcta;
+  delete obj.explicacion;
+  return obj;
 };
 
 // Comparar respuestas (insensible a acentos y mayúsculas)
@@ -81,4 +90,5 @@ module.exports = {
   obtenerIP,
   compararRespuestas,
   normalizarRespuesta,
+  ocultarRespuesta,
 };

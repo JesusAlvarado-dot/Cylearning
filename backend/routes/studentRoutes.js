@@ -43,7 +43,7 @@ router.get('/ejercicios/:id/respuestas', exerciseController.obtenerRespuestasEst
 // Resumen de lecciones y niveles completados (para locking en Flutter)
 router.get('/progreso/resumen', progressController.obtenerResumen);
 
-// Marcar lección como completada (requiere >= 60%)
+// Marcar lección como completada (requiere >= 70%)
 router.post('/lecciones/:id/completar', progressController.completarLeccion);
 
 // Marcar nivel como completado (requiere >= 70% en prueba final)

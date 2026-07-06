@@ -7,12 +7,10 @@ const connectDB = async () => {
       ? environment.mongodb.testUri 
       : environment.mongodb.uri;
 
-    await mongoose.connect(uri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(uri);
 
-    console.log(`MongoDB conectado en ${environment.server.nodeEnv}: ${uri}`);
+    // No mostrar la URI completa: contiene credenciales
+    console.log(`MongoDB conectado en ${environment.server.nodeEnv}: ${uri.replace(/\/\/[^@]+@/, '//***:***@')}`);
     return mongoose.connection;
   } catch (error) {
     console.error('Error al conectar MongoDB:', error.message);
