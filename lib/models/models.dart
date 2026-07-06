@@ -129,6 +129,7 @@ class Nivel {
   final String descripcion;
   final int orden;
   final List<String> temas;
+  final List<String> leccionesIds;
 
   Nivel({
     required this.id,
@@ -136,15 +137,23 @@ class Nivel {
     required this.descripcion,
     required this.orden,
     required this.temas,
+    this.leccionesIds = const [],
   });
+
+  int get totalLecciones => leccionesIds.length;
 
   factory Nivel.fromJson(Map<String, dynamic> json) {
     return Nivel(
       id: json['_id'] ?? '',
       nombre: json['nombre'] ?? '',
       descripcion: json['descripcion'] ?? '',
-      orden: json['orden'] ?? 0,
+      // 'orden' y 'numero' se mantienen sincronizados en el backend;
+      // si orden falta, usar numero
+      orden: json['orden'] as int? ?? json['numero'] as int? ?? 0,
       temas: List<String>.from(json['temas'] ?? []),
+      leccionesIds: (json['lecciones'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
     );
   }
 }
@@ -186,8 +195,6 @@ class Ejercicio {
   final String id;
   final String pregunta;
   final List<String> opciones;
-  final int respuestaCorrecta;
-  final String explicacion;
   final String tema;
   final int dificultad;
 
@@ -195,25 +202,25 @@ class Ejercicio {
     required this.id,
     required this.pregunta,
     required this.opciones,
-    required this.respuestaCorrecta,
-    required this.explicacion,
     required this.tema,
     required this.dificultad,
   });
 
+  // El backend ya no envía respuesta_correcta: la calificación
+  // se hace en el servidor vía ApiService.submitEjercicio
   factory Ejercicio.fromJson(Map<String, dynamic> json) {
-    final opciones = List<String>.from(json['opciones'] ?? []);
-    // Backend stores respuesta_correcta as a string; find its index in opciones
-    final respStr = (json['respuesta_correcta'] ?? '').toString().trim().toLowerCase();
-    final idx = opciones.indexWhere((o) => o.trim().toLowerCase() == respStr);
     return Ejercicio(
       id: json['_id'] ?? '',
       pregunta: json['pregunta'] ?? '',
-      opciones: opciones,
-      respuestaCorrecta: idx >= 0 ? idx : (json['respuestaCorrecta'] as int? ?? 0),
-      explicacion: json['explicacion'] ?? '',
+      opciones: List<String>.from(json['opciones'] ?? []),
       tema: json['tema'] ?? '',
       dificultad: json['dificultad'] as int? ?? 1,
     );
+  }
+
+  // Índice de la respuesta correcta devuelta por el servidor tras responder
+  int indexDeRespuesta(String respuestaCorrecta) {
+    final r = respuestaCorrecta.trim().toLowerCase();
+    return opciones.indexWhere((o) => o.trim().toLowerCase() == r);
   }
 }

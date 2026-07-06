@@ -29,6 +29,9 @@ class _RegistroScreenState extends State<RegistroScreen>
   @override
   void initState() {
     super.initState();
+    // Sin esto, registroExitoso=true de una visita anterior cierra la pantalla
+    // (síncrono, antes del primer build; no notifica listeners)
+    context.read<AuthProvider>().limpiarEstado();
     _floatCtrl = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 2200),
     )..repeat(reverse: true);

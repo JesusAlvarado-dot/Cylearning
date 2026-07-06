@@ -68,8 +68,9 @@ class _NivelesScreenState extends State<NivelesScreen>
       backgroundColor: _kBg,
       body: Consumer<AuthProvider>(
         builder: (context, auth, _) {
-          final nombre =
-              auth.usuario?.nombre.split(' ').first ?? 'Explorador';
+          final nombre = (auth.usuario?.nombre.trim().isNotEmpty ?? false)
+              ? auth.usuario!.nombre.trim().split(' ').first
+              : 'Explorador';
           final puntos = auth.usuario?.puntosTotales ?? 0;
           final medallas = auth.usuario?.medallas.length ?? 0;
           final racha = auth.racha;
@@ -171,6 +172,10 @@ class _NivelesScreenState extends State<NivelesScreen>
                           final isCompleted = auth.isNivelCompletado(niveles[i].id);
                           final isLocked = i > 0 &&
                               !auth.isNivelCompletado(niveles[i - 1].id);
+                          final leccionesCompletadas = niveles[i]
+                              .leccionesIds
+                              .where(auth.isLeccionCompletada)
+                              .length;
                           return _NivelCard(
                             nivel: niveles[i],
                             color: _levelColors[i % _levelColors.length],
@@ -179,6 +184,7 @@ class _NivelesScreenState extends State<NivelesScreen>
                             index: i,
                             isLocked: isLocked,
                             isCompleted: isCompleted,
+                            leccionesCompletadas: leccionesCompletadas,
                           );
                         },
                         childCount: niveles.length,
@@ -259,7 +265,7 @@ class _Header extends StatelessWidget {
                     ),
                     child: Center(
                       child: Text(
-                        nombre[0].toUpperCase(),
+                        nombre.isNotEmpty ? nombre[0].toUpperCase() : '?',
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
@@ -453,6 +459,7 @@ class _NivelCard extends StatefulWidget {
   final int index;
   final bool isLocked;
   final bool isCompleted;
+  final int leccionesCompletadas;
   const _NivelCard({
     required this.nivel,
     required this.color,
@@ -461,6 +468,7 @@ class _NivelCard extends StatefulWidget {
     required this.index,
     required this.isLocked,
     required this.isCompleted,
+    required this.leccionesCompletadas,
   });
   @override
   State<_NivelCard> createState() => _NivelCardState();
@@ -605,17 +613,39 @@ class _NivelCardState extends State<_NivelCard>
                               ),
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: List.generate(
-                              3,
-                              (i) => Text(
-                                locked
-                                    ? '⬜'
-                                    : (i < (widget.index % 3 + 1) ? '⭐' : '☆'),
-                                style: const TextStyle(fontSize: 13),
-                              ),
+                          const SizedBox(height: 8),
+                          // Progreso real de lecciones del nivel
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Column(
+                              children: [
+                                Text(
+                                  locked
+                                      ? '0/${widget.nivel.totalLecciones} lecciones'
+                                      : '${widget.leccionesCompletadas}/${widget.nivel.totalLecciones} lecciones',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: _kMuted,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: LinearProgressIndicator(
+                                    value: locked || widget.nivel.totalLecciones == 0
+                                        ? 0
+                                        : widget.leccionesCompletadas /
+                                            widget.nivel.totalLecciones,
+                                    minHeight: 6,
+                                    backgroundColor: const Color(0xFFE5E7EB),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        locked
+                                            ? const Color(0xFF9CA3AF)
+                                            : cardColor),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],

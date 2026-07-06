@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class Config {
@@ -28,13 +29,13 @@ class Config {
   // Display all config (para debugging)
   static void printConfig() {
     if (isDebug) {
-      print('=== CyLearn Configuration ===');
-      print('API URL: $apiUrl');
-      print('App Name: $appName');
-      print('Version: $version');
-      print('Debug Mode: $isDebug');
-      print('API Timeout: $apiTimeout segundos');
-      print('=============================');
+      debugPrint('=== CyLearn Configuration ===');
+      debugPrint('API URL: $apiUrl');
+      debugPrint('App Name: $appName');
+      debugPrint('Version: $version');
+      debugPrint('Debug Mode: $isDebug');
+      debugPrint('API Timeout: $apiTimeout segundos');
+      debugPrint('=============================');
     }
   }
 }

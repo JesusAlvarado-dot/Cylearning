@@ -35,7 +35,9 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
   List<Ejercicio> _ejercicios = [];
   int _currentIndex = 0;
   int? _selectedOption;
+  int? _correctIndex;
   bool _answered = false;
+  bool _submitting = false;
   bool _isCorrect = false;
   int _score = 0;
   bool _finished = false;
@@ -82,18 +84,42 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
     super.dispose();
   }
 
-  void _onOptionTap(int idx) {
-    if (_answered) return;
+  // La calificación se hace en el servidor: la respuesta correcta no viaja
+  // al cliente hasta después de responder
+  Future<void> _onOptionTap(int idx) async {
+    if (_answered || _submitting) return;
     HapticFeedback.lightImpact();
-    final correct = idx == _ejercicios[_currentIndex].respuestaCorrecta;
+    final ejercicio = _ejercicios[_currentIndex];
     setState(() {
+      _submitting = true;
       _selectedOption = idx;
-      _answered = true;
-      _isCorrect = correct;
-      if (correct) _score++;
     });
-    _feedbackCtrl.forward(from: 0);
-    _bounceCtrl.reverse().then((_) => _bounceCtrl.forward());
+    try {
+      final r = await ApiService.submitEjercicio(
+          ejercicio.id, ejercicio.opciones[idx]);
+      if (!mounted) return;
+      final correct = r['esCorrecta'] == true;
+      setState(() {
+        _answered = true;
+        _isCorrect = correct;
+        _correctIndex = ejercicio
+            .indexDeRespuesta((r['respuesta_correcta'] ?? '').toString());
+        if (correct) _score++;
+        _submitting = false;
+      });
+      _feedbackCtrl.forward(from: 0);
+      _bounceCtrl.reverse().then((_) => _bounceCtrl.forward());
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _selectedOption = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('No se pudo enviar tu respuesta. Intenta de nuevo')),
+      );
+    }
   }
 
   void _onNext() {
@@ -101,6 +127,7 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
       setState(() {
         _currentIndex++;
         _selectedOption = null;
+        _correctIndex = null;
         _answered = false;
       });
       _feedbackCtrl.reset();
@@ -158,12 +185,14 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
                   onReplay: () => setState(() {
                     _currentIndex = 0;
                     _selectedOption = null;
+                    _correctIndex = null;
                     _answered = false;
                     _isCorrect = false;
                     _score = 0;
                     _finished = false;
                     _progressSaved = false;
                     _feedbackCtrl.reset();
+                    _ejercicios = [];
                     _ejerciciosF = _fetchAll();
                   }),
                   onBack: () => Navigator.of(context).pop(),
@@ -267,7 +296,7 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
     if (!_answered) {
       return i == _selectedOption ? _OptionState.selected : _OptionState.normal;
     }
-    if (i == e.respuestaCorrecta) return _OptionState.correct;
+    if (i == _correctIndex) return _OptionState.correct;
     if (i == _selectedOption) return _OptionState.wrong;
     return _OptionState.normal;
   }

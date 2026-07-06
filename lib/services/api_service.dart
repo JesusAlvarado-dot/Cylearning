@@ -8,6 +8,9 @@ class ApiService {
   static late String baseUrl;
   static String? _token;
 
+  // Timeout de todas las llamadas HTTP (API_TIMEOUT del .env, 30s por defecto)
+  static Duration get _timeout => Duration(seconds: Config.apiTimeout);
+
   // Inicializar con URL del .env
   static void initialize() {
     baseUrl = Config.apiUrl;
@@ -35,7 +38,7 @@ class ApiService {
       Uri.parse('$baseUrl/auth/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'email': email, 'contrasena': contrasena}),
-    );
+    ).timeout(_timeout);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -61,7 +64,7 @@ class ApiService {
         'email': email,
         'contrasena': contrasena,
       }),
-    );
+    ).timeout(_timeout);
 
     if (response.statusCode == 201) {
       final data = jsonDecode(response.body);
@@ -83,13 +86,26 @@ class ApiService {
     }
   }
 
+  // Obtener el usuario actual con puntos/medallas/racha actualizados
+  static Future<Usuario> getUsuarioActual() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/auth/me'),
+      headers: _headers,
+    ).timeout(_timeout);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return Usuario.fromJson(data['datos']);
+    }
+    throw Exception('Error al obtener el usuario');
+  }
+
   static Future<bool> verificarToken() async {
     if (_token == null) return false;
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/auth/me'),
         headers: _headers,
-      );
+      ).timeout(_timeout);
       return response.statusCode == 200;
     } catch (_) {
       return false;
@@ -106,9 +122,9 @@ class ApiService {
   // NIVELES ENDPOINTS
   static Future<List<Nivel>> getNiveles() async {
     final response = await http.get(
-      Uri.parse('$baseUrl/student/niveles'),
+      Uri.parse('$baseUrl/student/niveles?limite=100'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -124,7 +140,7 @@ class ApiService {
     final response = await http.get(
       Uri.parse('$baseUrl/student/niveles/$nivelId/estructura'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -148,7 +164,7 @@ class ApiService {
     final response = await http.get(
       Uri.parse('$baseUrl/student/lecciones/$leccionId'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -163,7 +179,7 @@ class ApiService {
     final response = await http.get(
       Uri.parse('$baseUrl/student/lecciones/$leccionId/iniciar'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -179,7 +195,7 @@ class ApiService {
     final response = await http.get(
       Uri.parse('$baseUrl/student/progreso/resumen'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return ProgresoResumen.fromJson(data['datos']);
@@ -193,7 +209,7 @@ class ApiService {
         Uri.parse('$baseUrl/student/lecciones/$leccionId/completar'),
         headers: _headers,
         body: jsonEncode({'porcentaje': porcentaje}),
-      );
+      ).timeout(_timeout);
       if (response.statusCode == 200) {
         return jsonDecode(response.body)['datos'] as Map<String, dynamic>;
       }
@@ -207,7 +223,7 @@ class ApiService {
         Uri.parse('$baseUrl/student/niveles/$nivelId/completar'),
         headers: _headers,
         body: jsonEncode({'porcentaje': porcentaje}),
-      );
+      ).timeout(_timeout);
       if (response.statusCode == 200) {
         return jsonDecode(response.body)['datos'] as Map<String, dynamic>;
       }
@@ -219,7 +235,7 @@ class ApiService {
     final response = await http.get(
       Uri.parse('$baseUrl/student/ranking'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       final List<dynamic> lista = data['datos'] as List? ?? [];
@@ -233,7 +249,7 @@ class ApiService {
     final response = await http.get(
       Uri.parse('$baseUrl/admin/usuarios?orden=$orden&limite=100'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       final List<dynamic> lista = data['datos']['datos'];
@@ -248,7 +264,7 @@ class ApiService {
       Uri.parse('$baseUrl/admin/usuarios/$userId/medalla'),
       headers: _headers,
       body: jsonEncode({'tipo': tipo, 'descripcion': descripcion}),
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 200) {
       throw Exception(jsonDecode(response.body)['mensaje'] ?? 'Error al dar medalla');
     }
@@ -269,7 +285,7 @@ class ApiService {
         'contrasena': contrasena,
         'rol': rol,
       }),
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 201) {
       final body = jsonDecode(response.body);
       final errores = body['errores'] as List?;
@@ -286,7 +302,7 @@ class ApiService {
       Uri.parse('$baseUrl/admin/usuarios/$id'),
       headers: _headers,
       body: jsonEncode(data),
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al actualizar usuario');
@@ -297,7 +313,7 @@ class ApiService {
     final response = await http.delete(
       Uri.parse('$baseUrl/admin/usuarios/$id'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al eliminar usuario');
@@ -308,7 +324,7 @@ class ApiService {
     final response = await http.get(
       Uri.parse('$baseUrl/admin/temas?limite=100'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return List<Map<String, dynamic>>.from(data['datos']['datos']);
@@ -321,7 +337,7 @@ class ApiService {
     final response = await http.get(
       Uri.parse('$baseUrl/admin/lecciones?limite=100'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return List<Map<String, dynamic>>.from(data['datos']['datos']);
@@ -345,7 +361,7 @@ class ApiService {
         'contenido': contenido,
         'tema_id': temaId,
       }),
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 201) {
       final body = jsonDecode(response.body);
       final errores = body['errores'] as List?;
@@ -377,7 +393,7 @@ class ApiService {
         'puntos': puntos,
         'leccion_id': leccionId,
       }),
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 201) {
       final body = jsonDecode(response.body);
       final errores = body['errores'] as List?;
@@ -388,16 +404,18 @@ class ApiService {
     }
   }
 
+  // Califica la respuesta en el servidor. Devuelve
+  // {esCorrecta, respuesta_correcta, explicacion, ...}
   static Future<Map<String, dynamic>> submitEjercicio(
-      String ejercicioId, int respuesta) async {
+      String ejercicioId, String respuesta) async {
     final response = await http.post(
       Uri.parse('$baseUrl/student/ejercicios/$ejercicioId/responder'),
       headers: _headers,
       body: jsonEncode({'respuesta': respuesta}),
-    );
+    ).timeout(_timeout);
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+      return jsonDecode(response.body)['datos'] as Map<String, dynamic>;
     } else {
       throw Exception('Error al enviar respuesta');
     }
@@ -417,7 +435,7 @@ class ApiService {
         'numero': orden,
         'dificultad': dificultad,
       }),
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 201) {
       final body = jsonDecode(response.body);
       final errores = body['errores'] as List?;
@@ -434,7 +452,7 @@ class ApiService {
       Uri.parse('$baseUrl/admin/niveles/$id'),
       headers: _headers,
       body: jsonEncode(data),
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al actualizar nivel');
@@ -445,7 +463,7 @@ class ApiService {
     final response = await http.delete(
       Uri.parse('$baseUrl/admin/niveles/$id'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al eliminar nivel');
@@ -465,7 +483,7 @@ class ApiService {
         'nivel_id': nivelId,
         'orden': orden,
       }),
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 201) {
       final body = jsonDecode(response.body);
       final errores = body['errores'] as List?;
@@ -482,7 +500,7 @@ class ApiService {
       Uri.parse('$baseUrl/admin/temas/$id'),
       headers: _headers,
       body: jsonEncode(data),
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al actualizar tema');
@@ -493,7 +511,7 @@ class ApiService {
     final response = await http.delete(
       Uri.parse('$baseUrl/admin/temas/$id'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al eliminar tema');
@@ -508,7 +526,7 @@ class ApiService {
       Uri.parse('$baseUrl/admin/lecciones/$id'),
       headers: _headers,
       body: jsonEncode(data),
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al actualizar lección');
@@ -519,7 +537,7 @@ class ApiService {
     final response = await http.delete(
       Uri.parse('$baseUrl/admin/lecciones/$id'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al eliminar lección');
@@ -534,7 +552,7 @@ class ApiService {
     final response = await http.get(
       Uri.parse('$baseUrl/admin/ejercicios$query'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return List<Map<String, dynamic>>.from(data['datos']['datos']);
@@ -549,7 +567,7 @@ class ApiService {
       Uri.parse('$baseUrl/admin/ejercicios/$id'),
       headers: _headers,
       body: jsonEncode(data),
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al actualizar ejercicio');
@@ -560,7 +578,7 @@ class ApiService {
     final response = await http.delete(
       Uri.parse('$baseUrl/admin/ejercicios/$id'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al eliminar ejercicio');

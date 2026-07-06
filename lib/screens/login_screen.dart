@@ -30,6 +30,8 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
+    // Limpiar errores de una pantalla anterior (p. ej. registro)
+    context.read<AuthProvider>().limpiarEstado();
     _floatCtrl = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 2400),
     )..repeat(reverse: true);

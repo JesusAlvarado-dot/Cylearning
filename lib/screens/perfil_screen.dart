@@ -218,7 +218,7 @@ class _PerfilScreenState extends State<PerfilScreen>
                             _InfoRow('📧', 'Correo', usuario.email, accent),
                             const SizedBox(height: 12),
                             _InfoRow('📅', 'Miembro desde',
-                              usuario.fechaRegistro.toString().split('T')[0],
+                              usuario.fechaRegistro.toIso8601String().split('T')[0],
                               accent),
                           ],
                         ),

@@ -46,6 +46,7 @@ class AuthProvider with ChangeNotifier {
     try {
       final response = await ApiService.login(email, contrasena);
       _usuario = Usuario.fromJson(response['datos']['usuario']);
+      _racha = _usuario?.racha ?? 0;
       _isAuthenticated = true;
     } catch (e) {
       _error = e.toString().replaceFirst('Exception: ', '');
@@ -54,6 +55,13 @@ class AuthProvider with ChangeNotifier {
       _cargando = false;
       notifyListeners();
     }
+  }
+
+  // Limpiar error y flag de registro al entrar a login/registro,
+  // para que no queden estados de una visita anterior
+  void limpiarEstado() {
+    _error = '';
+    _registroExitoso = false;
   }
 
   Future<void> registro(String nombre, String email, String contrasena) async {
@@ -78,12 +86,22 @@ class AuthProvider with ChangeNotifier {
     } catch (_) {}
   }
 
+  // Refrescar puntos/medallas/racha desde el servidor
+  Future<void> refreshUsuario() async {
+    try {
+      _usuario = await ApiService.getUsuarioActual();
+      _racha = _usuario?.racha ?? _racha;
+      notifyListeners();
+    } catch (_) {}
+  }
+
   Future<Map<String, dynamic>> marcarLeccionCompleta(String leccionId, int porcentaje) async {
     final result = await ApiService.completarLeccion(leccionId, porcentaje);
     if (result['desbloqueado'] == true) {
       _progreso.leccionesCompletadas.add(leccionId);
       _racha = result['racha'] as int? ?? _racha;
       notifyListeners();
+      await refreshUsuario();
     }
     return result;
   }
@@ -94,6 +112,7 @@ class AuthProvider with ChangeNotifier {
       _progreso.nivelesCompletados.add(nivelId);
       _racha = result['racha'] as int? ?? _racha;
       notifyListeners();
+      await refreshUsuario();
     }
     return result;
   }
