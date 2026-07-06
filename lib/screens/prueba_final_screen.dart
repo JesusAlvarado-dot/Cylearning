@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/sound_service.dart';
 import '../models/models.dart';
 import '../widgets/celebration_overlay.dart';
+import '../widgets/medalla_dialog.dart';
 
 const _kBg     = Color(0xFFFFF9F2);
 const _kDark   = Color(0xFF1C1140);
@@ -39,6 +41,7 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
   bool _answered = false;
   bool _submitting = false;
   bool _isCorrect = false;
+  String _explicacion = '';
   int _score = 0;
   bool _finished = false;
   bool _progressSaved = false;
@@ -102,11 +105,13 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
       setState(() {
         _answered = true;
         _isCorrect = correct;
+        _explicacion = (r['explicacion'] ?? '').toString();
         _correctIndex = ejercicio
             .indexDeRespuesta((r['respuesta_correcta'] ?? '').toString());
         if (correct) _score++;
         _submitting = false;
       });
+      correct ? SoundService.correct() : SoundService.wrong();
       _feedbackCtrl.forward(from: 0);
       _bounceCtrl.reverse().then((_) => _bounceCtrl.forward());
     } catch (_) {
@@ -129,6 +134,7 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
         _selectedOption = null;
         _correctIndex = null;
         _answered = false;
+        _explicacion = '';
       });
       _feedbackCtrl.reset();
     } else {
@@ -170,10 +176,18 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
             if (!_progressSaved) {
               _progressSaved = true;
               final pctInt = (pct * 100).round();
+              if (pct >= 0.7) SoundService.levelUp();
               WidgetsBinding.instance.addPostFrameCallback((_) async {
                 if (!mounted) return;
-                await context.read<AuthProvider>()
+                final result = await context.read<AuthProvider>()
                     .marcarNivelCompleto(widget.nivel.id, pctInt);
+                if (!context.mounted) return;
+                // Celebrar la medalla apenas se gana
+                final medalla = result['medalla'];
+                if (medalla is Map) {
+                  await showMedallaDialog(
+                      context, Map<String, dynamic>.from(medalla));
+                }
               });
             }
             return Stack(
@@ -188,6 +202,7 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
                     _correctIndex = null;
                     _answered = false;
                     _isCorrect = false;
+                    _explicacion = '';
                     _score = 0;
                     _finished = false;
                     _progressSaved = false;
@@ -272,7 +287,9 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
                         if (_answered)
                           ScaleTransition(
                             scale: _feedbackAnim,
-                            child: _FeedbackBanner(correct: _isCorrect),
+                            child: _FeedbackBanner(
+                                correct: _isCorrect,
+                                explicacion: _explicacion),
                           ),
                         const SizedBox(height: 16),
                         if (_answered)
@@ -578,7 +595,8 @@ class _OptionTileState extends State<_OptionTile>
 
 class _FeedbackBanner extends StatelessWidget {
   final bool correct;
-  const _FeedbackBanner({required this.correct});
+  final String explicacion;
+  const _FeedbackBanner({required this.correct, this.explicacion = ''});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -613,6 +631,28 @@ class _FeedbackBanner extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 12, color: _kMuted, fontWeight: FontWeight.w600),
                   ),
+                  // Explicación educativa que envía el servidor tras responder
+                  if (explicacion.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('💡', style: TextStyle(fontSize: 14)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            explicacion,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: _kDark,
+                              fontWeight: FontWeight.w600,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),

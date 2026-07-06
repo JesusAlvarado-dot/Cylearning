@@ -4,10 +4,15 @@ const levelController = require('../controllers/levelController');
 const lessonController = require('../controllers/lessonController');
 const exerciseController = require('../controllers/exerciseController');
 const progressController = require('../controllers/progressController');
+const userController = require('../controllers/userController');
 const authMiddleware = require('../middlewares/authMiddleware');
 
 // Middleware de autenticación para todas las rutas
 router.use(authMiddleware);
+
+// ============== PERFIL ==============
+// Actualizar el propio perfil (nombre y/o contraseña)
+router.put('/perfil', userController.actualizarPerfil);
 
 // ============== NIVELES ==============
 // Obtener todos los niveles activos

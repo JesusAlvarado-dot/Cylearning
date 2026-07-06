@@ -743,8 +743,10 @@ class _ContenidoTabState extends State<_ContenidoTab> {
     );
     if (!ok || !mounted) return;
     try {
-      await ApiService.eliminarNivel(nv.id);
-      _snack('Nivel eliminado');
+      final d = await ApiService.eliminarNivel(nv.id);
+      _snack('Nivel eliminado: ${d['temas_eliminados'] ?? 0} temas, '
+          '${d['lecciones_eliminadas'] ?? 0} lecciones, '
+          '${d['ejercicios_eliminados'] ?? 0} ejercicios');
       _cargarNiveles();
     } catch (e) {
       _snack(_extractMsg(e), color: _red);
@@ -838,8 +840,9 @@ class _ContenidoTabState extends State<_ContenidoTab> {
     );
     if (!ok || !mounted) return;
     try {
-      await ApiService.eliminarTema(tema['_id'] as String);
-      _snack('Tema eliminado');
+      final d = await ApiService.eliminarTema(tema['_id'] as String);
+      _snack('Tema eliminado: ${d['lecciones_eliminadas'] ?? 0} lecciones, '
+          '${d['ejercicios_eliminados'] ?? 0} ejercicios');
       _cargarTemasDelNivel(_nivelSel!.id);
     } catch (e) {
       _snack(_extractMsg(e), color: _red);
@@ -946,8 +949,9 @@ class _ContenidoTabState extends State<_ContenidoTab> {
     );
     if (!ok || !mounted) return;
     try {
-      await ApiService.eliminarLeccion(lec['_id'] as String);
-      _snack('Lección eliminada');
+      final d = await ApiService.eliminarLeccion(lec['_id'] as String);
+      _snack('Lección eliminada: '
+          '${d['ejercicios_eliminados'] ?? 0} ejercicios');
       _cargarLeccionesDelTema(_temaSel!['_id'] as String);
     } catch (e) {
       _snack(_extractMsg(e), color: _red);

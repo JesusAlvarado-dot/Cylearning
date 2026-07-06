@@ -21,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen>
   final _emailCtrl    = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _obscure = true;
+  bool _recordar = false;
 
   late AnimationController _floatCtrl;
   late Animation<double> _floatAnim;
@@ -181,7 +182,42 @@ class _LoginScreenState extends State<LoginScreen>
                           obscure: _obscure,
                           onToggle: () => setState(() => _obscure = !_obscure),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 10),
+                        // Recordarme — mantiene la sesión al cerrar la app
+                        GestureDetector(
+                          onTap: () => setState(() => _recordar = !_recordar),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 22, height: 22,
+                                decoration: BoxDecoration(
+                                  color: _recordar ? _kPurple : Colors.white,
+                                  borderRadius: BorderRadius.circular(7),
+                                  border: Border.all(
+                                    color: _recordar
+                                        ? _kPurple
+                                        : const Color(0xFFD1D5DB),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: _recordar
+                                    ? const Icon(Icons.check_rounded,
+                                        size: 16, color: Colors.white)
+                                    : null,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Recordarme en este equipo',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: _kMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
                         Consumer<AuthProvider>(
                           builder: (_, auth, __) => auth.error.isNotEmpty
                               ? _ErrorBanner(auth.error)
@@ -229,7 +265,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   Future<void> _doLogin(AuthProvider auth) async {
     final nav = Navigator.of(context);
-    await auth.login(_emailCtrl.text.trim(), _passwordCtrl.text);
+    await auth.login(_emailCtrl.text.trim(), _passwordCtrl.text,
+        recordar: _recordar);
     if (!mounted) return;
     if (!auth.isAuthenticated) return;
 

@@ -32,6 +32,19 @@ const validarPuntos = body('puntos')
   .isInt({ min: 0, max: 100 })
   .withMessage('Los puntos deben ser un número entre 0 y 100');
 
+// Variantes opcionales para creación/actualización parcial
+const validarPuntosOpcional = body('puntos')
+  .optional()
+  .isInt({ min: 0, max: 100 })
+  .withMessage('Los puntos deben ser un número entre 0 y 100');
+
+const validarTipoEjercicioOpcional = body('tipo')
+  .optional()
+  .isIn(Object.values(constants.EXERCISE_TYPES))
+  .withMessage(
+    `El tipo debe ser uno de: ${Object.values(constants.EXERCISE_TYPES).join(', ')}`
+  );
+
 // Middleware para verificar resultados de validación
 const verificarValidacion = (req, res, next) => {
   const errors = validationResult(req);
@@ -54,6 +67,8 @@ module.exports = {
   validarNombre,
   validarRol,
   validarTipoEjercicio,
+  validarTipoEjercicioOpcional,
   validarPuntos,
+  validarPuntosOpcional,
   verificarValidacion,
 };

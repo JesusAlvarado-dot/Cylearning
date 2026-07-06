@@ -11,6 +11,15 @@ class ApiService {
   // Timeout de todas las llamadas HTTP (API_TIMEOUT del .env, 30s por defecto)
   static Duration get _timeout => Duration(seconds: Config.apiTimeout);
 
+  // ── Caché en memoria (niveles y lecciones cambian solo desde el admin) ──
+  static List<Nivel>? _nivelesCache;
+  static final Map<String, List<Leccion>> _leccionesCache = {};
+
+  static void invalidateCache() {
+    _nivelesCache = null;
+    _leccionesCache.clear();
+  }
+
   // Inicializar con URL del .env
   static void initialize() {
     baseUrl = Config.apiUrl;
@@ -114,13 +123,35 @@ class ApiService {
 
   static Future<void> logout() async {
     _token = null;
+    invalidateCache();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
     await prefs.remove('usuario');
   }
 
+  // Actualizar el propio perfil (contraseña vacía = no cambiarla)
+  static Future<Usuario> actualizarPerfil(
+      {String? nombre, String? contrasena}) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/student/perfil'),
+      headers: _headers,
+      body: jsonEncode({
+        if (nombre != null && nombre.isNotEmpty) 'nombre': nombre,
+        if (contrasena != null && contrasena.isNotEmpty) 'contrasena': contrasena,
+      }),
+    ).timeout(_timeout);
+
+    if (response.statusCode == 200) {
+      return Usuario.fromJson(jsonDecode(response.body)['datos']);
+    }
+    final body = jsonDecode(response.body);
+    throw Exception(body['mensaje'] ?? 'Error al actualizar el perfil');
+  }
+
   // NIVELES ENDPOINTS
-  static Future<List<Nivel>> getNiveles() async {
+  static Future<List<Nivel>> getNiveles({bool forceRefresh = false}) async {
+    if (!forceRefresh && _nivelesCache != null) return _nivelesCache!;
+
     final response = await http.get(
       Uri.parse('$baseUrl/student/niveles?limite=100'),
       headers: _headers,
@@ -129,14 +160,20 @@ class ApiService {
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       final List<dynamic> nivelesJson = data['datos']['datos'];
-      return nivelesJson.map((n) => Nivel.fromJson(n)).toList();
+      _nivelesCache = nivelesJson.map((n) => Nivel.fromJson(n)).toList();
+      return _nivelesCache!;
     } else {
       throw Exception('Error al cargar niveles');
     }
   }
 
   // LECCIONES ENDPOINTS
-  static Future<List<Leccion>> getLecciones(String nivelId) async {
+  static Future<List<Leccion>> getLecciones(String nivelId,
+      {bool forceRefresh = false}) async {
+    if (!forceRefresh && _leccionesCache.containsKey(nivelId)) {
+      return _leccionesCache[nivelId]!;
+    }
+
     final response = await http.get(
       Uri.parse('$baseUrl/student/niveles/$nivelId/estructura'),
       headers: _headers,
@@ -154,7 +191,9 @@ class ApiService {
           lecciones.add(l);
         }
       }
-      return lecciones.map((l) => Leccion.fromJson(l)).toList();
+      final resultado = lecciones.map((l) => Leccion.fromJson(l)).toList();
+      _leccionesCache[nivelId] = resultado;
+      return resultado;
     } else {
       throw Exception('Error al cargar lecciones');
     }
@@ -370,6 +409,7 @@ class ApiService {
       }
       throw Exception(body['mensaje'] ?? 'Error al crear lección');
     }
+    invalidateCache();
   }
 
   static Future<void> crearEjercicio({
@@ -444,6 +484,7 @@ class ApiService {
       }
       throw Exception(body['mensaje'] ?? 'Error al crear nivel');
     }
+    invalidateCache();
   }
 
   static Future<void> actualizarNivel(
@@ -457,9 +498,11 @@ class ApiService {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al actualizar nivel');
     }
+    invalidateCache();
   }
 
-  static Future<void> eliminarNivel(String id) async {
+  // Devuelve los conteos de lo eliminado en cascada
+  static Future<Map<String, dynamic>> eliminarNivel(String id) async {
     final response = await http.delete(
       Uri.parse('$baseUrl/admin/niveles/$id'),
       headers: _headers,
@@ -468,6 +511,8 @@ class ApiService {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al eliminar nivel');
     }
+    invalidateCache();
+    return jsonDecode(response.body)['datos'] as Map<String, dynamic>? ?? {};
   }
 
   // ── ADMIN: Temas ──────────────────────────────────────────────────────────
@@ -492,6 +537,7 @@ class ApiService {
       }
       throw Exception(body['mensaje'] ?? 'Error al crear tema');
     }
+    invalidateCache();
   }
 
   static Future<void> actualizarTema(
@@ -505,9 +551,11 @@ class ApiService {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al actualizar tema');
     }
+    invalidateCache();
   }
 
-  static Future<void> eliminarTema(String id) async {
+  // Devuelve los conteos de lo eliminado en cascada
+  static Future<Map<String, dynamic>> eliminarTema(String id) async {
     final response = await http.delete(
       Uri.parse('$baseUrl/admin/temas/$id'),
       headers: _headers,
@@ -516,6 +564,8 @@ class ApiService {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al eliminar tema');
     }
+    invalidateCache();
+    return jsonDecode(response.body)['datos'] as Map<String, dynamic>? ?? {};
   }
 
   // ── ADMIN: Lecciones (update / delete) ───────────────────────────────────
@@ -531,9 +581,11 @@ class ApiService {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al actualizar lección');
     }
+    invalidateCache();
   }
 
-  static Future<void> eliminarLeccion(String id) async {
+  // Devuelve los conteos de lo eliminado en cascada
+  static Future<Map<String, dynamic>> eliminarLeccion(String id) async {
     final response = await http.delete(
       Uri.parse('$baseUrl/admin/lecciones/$id'),
       headers: _headers,
@@ -542,6 +594,8 @@ class ApiService {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al eliminar lección');
     }
+    invalidateCache();
+    return jsonDecode(response.body)['datos'] as Map<String, dynamic>? ?? {};
   }
 
   // ── ADMIN: Ejercicios ─────────────────────────────────────────────────────

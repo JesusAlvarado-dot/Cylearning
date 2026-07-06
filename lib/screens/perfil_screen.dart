@@ -32,6 +32,174 @@ class _PerfilScreenState extends State<PerfilScreen>
   @override
   void dispose() { _floatCtrl.dispose(); super.dispose(); }
 
+  // Editar nombre y/o contraseña (contraseña vacía = no cambiarla)
+  Future<void> _dlgEditarPerfil(AuthProvider auth) async {
+    final nombreCtrl = TextEditingController(text: auth.usuario?.nombre ?? '');
+    final passCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    String error = '';
+    bool guardando = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Dialog(
+          backgroundColor: _kBg,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Row(children: [
+                  Text('✏️', style: TextStyle(fontSize: 24)),
+                  SizedBox(width: 10),
+                  Text('Editar perfil',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: _kDark)),
+                ]),
+                const SizedBox(height: 18),
+                _campoPerfil(nombreCtrl, 'Nombre', false),
+                const SizedBox(height: 10),
+                _campoPerfil(passCtrl, 'Nueva contraseña (opcional)', true),
+                const SizedBox(height: 10),
+                _campoPerfil(confirmCtrl, 'Confirmar contraseña', true),
+                if (error.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(error,
+                      style: const TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700)),
+                ],
+                const SizedBox(height: 18),
+                Row(children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(ctx).pop(),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                              color: const Color(0xFFE5E7EB), width: 1.5),
+                        ),
+                        child: const Center(
+                            child: Text('Cancelar',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: _kMuted))),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: guardando
+                          ? null
+                          : () async {
+                              final nombre = nombreCtrl.text.trim();
+                              final pass = passCtrl.text;
+                              if (nombre.length < 3) {
+                                setS(() => error =
+                                    'El nombre debe tener al menos 3 caracteres');
+                                return;
+                              }
+                              if (pass.isNotEmpty && pass.length < 6) {
+                                setS(() => error =
+                                    'La contraseña debe tener al menos 6 caracteres');
+                                return;
+                              }
+                              if (pass != confirmCtrl.text) {
+                                setS(() =>
+                                    error = 'Las contraseñas no coinciden');
+                                return;
+                              }
+                              setS(() {
+                                error = '';
+                                guardando = true;
+                              });
+                              try {
+                                await auth.actualizarPerfil(
+                                    nombre: nombre, contrasena: pass);
+                                if (ctx.mounted) Navigator.of(ctx).pop();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content:
+                                            Text('✅ Perfil actualizado')),
+                                  );
+                                }
+                              } catch (e) {
+                                setS(() {
+                                  guardando = false;
+                                  error = e
+                                      .toString()
+                                      .replaceFirst('Exception: ', '');
+                                });
+                              }
+                            },
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: _kPurple
+                              .withValues(alpha: guardando ? 0.6 : 1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Center(
+                          child: guardando
+                              ? const SizedBox(
+                                  width: 20, height: 20,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2))
+                              : const Text('Guardar',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _campoPerfil(
+          TextEditingController ctrl, String hint, bool obscure) =>
+      TextField(
+        controller: ctrl,
+        obscureText: obscure,
+        style: const TextStyle(
+            fontSize: 14, fontWeight: FontWeight.w600, color: _kDark),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(
+              color: _kMuted, fontWeight: FontWeight.w500, fontSize: 13),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: _kPurple, width: 2),
+          ),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -138,11 +306,37 @@ class _PerfilScreenState extends State<PerfilScreen>
 
                       const SizedBox(height: 14),
 
-                      // ── Name + role ─────────────────────────────────────
-                      Text(usuario.nombre, textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 24, fontWeight: FontWeight.w900,
-                          color: _kDark)),
+                      // ── Name + role + edit ──────────────────────────────
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text(usuario.nombre,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 24, fontWeight: FontWeight.w900,
+                                color: _kDark)),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => _dlgEditarPerfil(auth),
+                            child: Container(
+                              width: 34, height: 34,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: accent.withValues(alpha: 0.3),
+                                    width: 1.5),
+                              ),
+                              child: const Center(
+                                child: Text('✏️',
+                                    style: TextStyle(fontSize: 15))),
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 6),
                       Center(
                         child: Container(

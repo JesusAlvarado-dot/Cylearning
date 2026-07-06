@@ -274,6 +274,39 @@ exports.darMedalla = async (req, res, next) => {
   }
 };
 
+// Actualizar el propio perfil (nombre y/o contraseña)
+exports.actualizarPerfil = async (req, res, next) => {
+  try {
+    const { nombre, contrasena } = req.body;
+
+    const usuario = await User.findById(req.usuarioId).select('+contrasena');
+    if (!usuario) {
+      return respuestaError(res, constants.ERROR_MESSAGES.USER_NOT_FOUND, 404);
+    }
+
+    if (nombre !== undefined && nombre !== '') {
+      if (typeof nombre !== 'string' || nombre.trim().length < 3 || nombre.trim().length > 50) {
+        return respuestaError(res, 'El nombre debe tener entre 3 y 50 caracteres', 400);
+      }
+      usuario.nombre = nombre.trim();
+    }
+
+    // Contraseña vacía = no cambiarla
+    if (contrasena !== undefined && contrasena !== '') {
+      if (typeof contrasena !== 'string' || contrasena.length < 6) {
+        return respuestaError(res, 'La contraseña debe tener al menos 6 caracteres', 400);
+      }
+      usuario.contrasena = contrasena; // el pre-save la hashea
+    }
+
+    await usuario.save();
+
+    return respuestaExito(res, usuario.toJSON(), 'Perfil actualizado exitosamente');
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Cambiar contraseña
 exports.cambiarContrasena = async (req, res, next) => {
   try {

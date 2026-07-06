@@ -29,18 +29,33 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> _checkAuth() async {
     _cargando = true;
-    // Siempre arrancar desde login — limpiar sesión guardada
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('token');
-    await prefs.remove('usuario');
-    ApiService.clearToken();
-    _usuario = null;
-    _isAuthenticated = false;
+
+    // Restaurar la sesión solo si el usuario marcó "Recordarme"
+    if (prefs.getBool('recordar') ?? false) {
+      await ApiService.initToken();
+      try {
+        if (await ApiService.verificarToken()) {
+          _usuario = await ApiService.getUsuarioActual();
+          _racha = _usuario?.racha ?? 0;
+          _isAuthenticated = true;
+          await loadProgreso();
+        }
+      } catch (_) {}
+    }
+
+    if (!_isAuthenticated) {
+      await prefs.remove('token');
+      await prefs.remove('usuario');
+      ApiService.clearToken();
+      _usuario = null;
+    }
     _cargando = false;
     notifyListeners();
   }
 
-  Future<void> login(String email, String contrasena) async {
+  Future<void> login(String email, String contrasena,
+      {bool recordar = false}) async {
     _cargando = true;
     _error = '';
     try {
@@ -48,6 +63,8 @@ class AuthProvider with ChangeNotifier {
       _usuario = Usuario.fromJson(response['datos']['usuario']);
       _racha = _usuario?.racha ?? 0;
       _isAuthenticated = true;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('recordar', recordar);
     } catch (e) {
       _error = e.toString().replaceFirst('Exception: ', '');
       _isAuthenticated = false;
@@ -86,6 +103,13 @@ class AuthProvider with ChangeNotifier {
     } catch (_) {}
   }
 
+  // Actualizar nombre y/o contraseña; lanza excepción si el servidor rechaza
+  Future<void> actualizarPerfil({String? nombre, String? contrasena}) async {
+    _usuario = await ApiService.actualizarPerfil(
+        nombre: nombre, contrasena: contrasena);
+    notifyListeners();
+  }
+
   // Refrescar puntos/medallas/racha desde el servidor
   Future<void> refreshUsuario() async {
     try {
@@ -119,6 +143,8 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> logout() async {
     await ApiService.logout();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('recordar');
     _usuario = null;
     _isAuthenticated = false;
     _progreso = ProgresoResumen.empty();

@@ -13,6 +13,9 @@ const {
   validarEmail,
   validarContrasena,
   validarNombre,
+  validarTipoEjercicio,
+  validarTipoEjercicioOpcional,
+  validarPuntosOpcional,
   verificarValidacion,
 } = require('../utils/validators');
 
@@ -56,10 +59,22 @@ router.put('/lecciones/:id', lessonController.actualizarLeccion);
 router.delete('/lecciones/:id', lessonController.eliminarLeccion);
 
 // ============== EJERCICIOS ==============
-router.post('/ejercicios', exerciseController.crearEjercicio);
+router.post(
+  '/ejercicios',
+  validarTipoEjercicio,
+  validarPuntosOpcional,
+  verificarValidacion,
+  exerciseController.crearEjercicio
+);
 router.get('/ejercicios', exerciseController.obtenerTodosLosEjercicios);
 router.get('/ejercicios/:id', exerciseController.obtenerEjercicioPorId);
-router.put('/ejercicios/:id', exerciseController.actualizarEjercicio);
+router.put(
+  '/ejercicios/:id',
+  validarTipoEjercicioOpcional,
+  validarPuntosOpcional,
+  verificarValidacion,
+  exerciseController.actualizarEjercicio
+);
 router.delete('/ejercicios/:id', exerciseController.eliminarEjercicio);
 
 // ============== PROGRESO ==============
