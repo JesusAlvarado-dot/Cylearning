@@ -54,7 +54,30 @@ exports.obtenerTodosLosNiveles = async (req, res, next) => {
     const niveles = await Level.find(filtro)
       .skip(skip)
       .limit(limit)
-      .sort({ numero: 1 });
+      .sort({ orden: 1, numero: 1 })
+      .lean();
+
+    // Adjuntar las lecciones de cada nivel para que el cliente
+    // pueda mostrar el progreso real (X/Y lecciones completadas)
+    const nivelIds = niveles.map((n) => n._id);
+    const temas = await Topic.find({ nivel_id: { $in: nivelIds } })
+      .select('_id nivel_id')
+      .lean();
+    const lecciones = await Lesson.find({ tema_id: { $in: temas.map((t) => t._id) } })
+      .select('_id tema_id')
+      .lean();
+
+    const nivelDeTema = new Map(temas.map((t) => [t._id.toString(), t.nivel_id.toString()]));
+    const leccionesPorNivel = {};
+    for (const l of lecciones) {
+      const nivelId = nivelDeTema.get(l.tema_id.toString());
+      if (!nivelId) continue;
+      (leccionesPorNivel[nivelId] = leccionesPorNivel[nivelId] || []).push(l._id.toString());
+    }
+    for (const n of niveles) {
+      n.lecciones = leccionesPorNivel[n._id.toString()] || [];
+      n.total_lecciones = n.lecciones.length;
+    }
 
     const total = await Level.countDocuments(filtro);
 

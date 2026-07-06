@@ -1,4 +1,8 @@
+const mongoose = require('mongoose');
 const StudentProgress = require('../models/StudentProgress');
+const Lesson = require('../models/Lesson');
+const Topic = require('../models/Topic');
+const Exercise = require('../models/Exercise');
 const ExerciseHistory = require('../models/ExerciseHistory');
 const Level = require('../models/Level');
 const Progreso = require('../models/Progreso');
@@ -7,6 +11,31 @@ const { respuestaExito, respuestaError, respuestaPaginada, paginar } = require('
 const constants = require('../config/constants');
 
 // ─── Helpers privados ────────────────────────────────────────────────────────
+
+// Calcular el porcentaje del estudiante a partir de la última respuesta
+// registrada para cada ejercicio (calificada por el servidor). Los ejercicios
+// sin responder cuentan como incorrectos.
+async function _porcentajeServidor(estudianteId, ejercicioIds) {
+  const total = ejercicioIds.length;
+  if (total === 0) return 0;
+
+  const ultimas = await ExerciseHistory.aggregate([
+    {
+      $match: {
+        estudiante_id: new mongoose.Types.ObjectId(estudianteId),
+        ejercicio_id: { $in: ejercicioIds },
+      },
+    },
+    { $sort: { createdAt: 1 } },
+    { $group: { _id: '$ejercicio_id', estado: { $last: '$estado' } } },
+  ]);
+
+  const correctas = ultimas.filter(
+    (u) => u.estado === constants.ANSWER_STATUS.CORRECT
+  ).length;
+
+  return Math.round((correctas / total) * 100);
+}
 
 function _updateStreak(user) {
   const now = new Date();
@@ -60,10 +89,22 @@ exports.completarLeccion = async (req, res, next) => {
   try {
     const estudianteId = req.usuarioId;
     const leccionId    = req.params.id;
-    const porcentaje   = Number(req.body.porcentaje) || 0;
+
+    const leccion = await Lesson.findById(leccionId);
+    if (!leccion) {
+      return respuestaError(res, constants.ERROR_MESSAGES.LESSON_NOT_FOUND, 404);
+    }
+
+    // El porcentaje se calcula en el servidor a partir de las respuestas
+    // calificadas (no se confía en el valor enviado por el cliente)
+    const ejercicios = await Exercise.find({ leccion_id: leccionId, activo: true }).select('_id');
+    if (ejercicios.length === 0) {
+      return respuestaError(res, 'La lección no tiene ejercicios activos', 400);
+    }
+    const porcentaje = await _porcentajeServidor(estudianteId, ejercicios.map((e) => e._id));
 
     if (porcentaje < 70) {
-      return respuestaExito(res, { desbloqueado: false }, 'Necesitas al menos 70% para desbloquear el siguiente tema');
+      return respuestaExito(res, { desbloqueado: false, porcentaje }, 'Necesitas al menos 70% para desbloquear el siguiente tema');
     }
 
     const usuario = await User.findById(estudianteId);
@@ -95,6 +136,7 @@ exports.completarLeccion = async (req, res, next) => {
 
     return respuestaExito(res, {
       desbloqueado: true,
+      porcentaje,
       puntos_ganados,
       racha: usuario.racha,
       medalla: medalla_racha,
@@ -109,10 +151,27 @@ exports.completarNivel = async (req, res, next) => {
   try {
     const estudianteId = req.usuarioId;
     const nivelId      = req.params.id;
-    const porcentaje   = Number(req.body.porcentaje) || 0;
+
+    const nivel = await Level.findById(nivelId);
+    if (!nivel) {
+      return respuestaError(res, constants.ERROR_MESSAGES.LEVEL_NOT_FOUND, 404);
+    }
+
+    // El porcentaje se calcula en el servidor con todos los ejercicios
+    // activos del nivel (la prueba final los recorre todos)
+    const temas = await Topic.find({ nivel_id: nivelId }).select('_id');
+    const lecciones = await Lesson.find({ tema_id: { $in: temas.map((t) => t._id) } }).select('_id');
+    const ejercicios = await Exercise.find({
+      leccion_id: { $in: lecciones.map((l) => l._id) },
+      activo: true,
+    }).select('_id');
+    if (ejercicios.length === 0) {
+      return respuestaError(res, 'El nivel no tiene ejercicios activos', 400);
+    }
+    const porcentaje = await _porcentajeServidor(estudianteId, ejercicios.map((e) => e._id));
 
     if (porcentaje < 70) {
-      return respuestaExito(res, { desbloqueado: false }, 'Necesitas al menos 70% para desbloquear el siguiente nivel');
+      return respuestaExito(res, { desbloqueado: false, porcentaje }, 'Necesitas al menos 70% para desbloquear el siguiente nivel');
     }
 
     const usuario = await User.findById(estudianteId);
@@ -158,6 +217,7 @@ exports.completarNivel = async (req, res, next) => {
 
     return respuestaExito(res, {
       desbloqueado: true,
+      porcentaje,
       puntos_ganados,
       racha: usuario.racha,
       medalla,
@@ -411,7 +471,7 @@ exports.obtenerRankingEstudiantes = async (req, res, next) => {
 
     // Si se filtra por nivel, agregar match
     if (nivel_id) {
-      pipeline.unshift({ $match: { nivel_id: require('mongoose').Types.ObjectId(nivel_id) } });
+      pipeline.unshift({ $match: { nivel_id: new mongoose.Types.ObjectId(nivel_id) } });
     }
 
     const ranking = await StudentProgress.aggregate(pipeline);
@@ -419,7 +479,7 @@ exports.obtenerRankingEstudiantes = async (req, res, next) => {
     // Obtener información de los estudiantes
     const rankingConEstudiantes = [];
     for (let item of ranking) {
-      const estudiante = await require('../models/User').findById(item._id).select('nombre email');
+      const estudiante = await User.findById(item._id).select('nombre email');
       if (estudiante) {
         rankingConEstudiantes.push({
           estudiante,

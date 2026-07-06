@@ -2,7 +2,7 @@ const Lesson = require('../models/Lesson');
 const Topic = require('../models/Topic');
 const Exercise = require('../models/Exercise');
 const StudentProgress = require('../models/StudentProgress');
-const { respuestaExito, respuestaError, respuestaPaginada, paginar } = require('../utils/helpers');
+const { respuestaExito, respuestaError, respuestaPaginada, paginar, ocultarRespuesta } = require('../utils/helpers');
 const constants = require('../config/constants');
 const Log = require('../models/Log');
 
@@ -103,10 +103,15 @@ exports.obtenerLeccionPorId = async (req, res, next) => {
     }
 
     // Obtener ejercicios activos de la lección
-    const ejercicios = await Exercise.find({
+    let ejercicios = await Exercise.find({
       leccion_id: id,
       activo: true,
     }).sort({ orden: 1 });
+
+    // Los estudiantes no deben recibir la respuesta correcta
+    if (req.rol !== constants.ROLES.ADMIN) {
+      ejercicios = ejercicios.map(ocultarRespuesta);
+    }
 
     return respuestaExito(
       res,
@@ -242,7 +247,7 @@ exports.iniciarLeccion = async (req, res, next) => {
       await progreso.save();
     }
 
-    // Obtener ejercicios
+    // Obtener ejercicios sin la respuesta correcta (la calificación es del servidor)
     const ejercicios = await Exercise.find({
       leccion_id: id,
       activo: true,
@@ -253,7 +258,7 @@ exports.iniciarLeccion = async (req, res, next) => {
       res,
       {
         leccion,
-        ejercicios,
+        ejercicios: ejercicios.map(ocultarRespuesta),
         progreso,
       },
       'Lección iniciada exitosamente'

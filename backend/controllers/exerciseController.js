@@ -2,8 +2,7 @@ const Exercise = require('../models/Exercise');
 const Lesson = require('../models/Lesson');
 const ExerciseHistory = require('../models/ExerciseHistory');
 const StudentProgress = require('../models/StudentProgress');
-const User = require('../models/User');
-const { respuestaExito, respuestaError, respuestaPaginada, paginar, compararRespuestas, calcularPorcentaje } = require('../utils/helpers');
+const { respuestaExito, respuestaError, respuestaPaginada, paginar, compararRespuestas, calcularPorcentaje, ocultarRespuesta } = require('../utils/helpers');
 const constants = require('../config/constants');
 const Log = require('../models/Log');
 
@@ -75,12 +74,17 @@ exports.obtenerTodosLosEjercicios = async (req, res, next) => {
     if (leccion_id) filtro.leccion_id = leccion_id;
     if (activo !== undefined) filtro.activo = activo === 'true';
 
-    const ejercicios = await Exercise.find(filtro)
+    let ejercicios = await Exercise.find(filtro)
       .skip(skip)
       .limit(limit)
       .populate('leccion_id', 'nombre')
       .populate('creado_por', 'nombre email')
       .sort({ orden: 1 });
+
+    // Los estudiantes no deben recibir la respuesta correcta
+    if (req.rol !== constants.ROLES.ADMIN) {
+      ejercicios = ejercicios.map(ocultarRespuesta);
+    }
 
     const total = await Exercise.countDocuments(filtro);
 
@@ -115,7 +119,7 @@ exports.obtenerEjercicioPorId = async (req, res, next) => {
 
     return respuestaExito(
       res,
-      ejercicio,
+      req.rol === constants.ROLES.ADMIN ? ejercicio : ocultarRespuesta(ejercicio),
       'Ejercicio obtenido exitosamente'
     );
   } catch (error) {
@@ -167,7 +171,7 @@ exports.actualizarEjercicio = async (req, res, next) => {
     await Log.create({
       tipo: constants.LOG_TYPES.EXERCISE_UPDATED,
       usuario_id: req.usuarioId,
-      descripcion: `Ejercicio actualizado: ${pregunta.substring(0, 50)}`,
+      descripcion: `Ejercicio actualizado: ${ejercicio.pregunta.substring(0, 50)}`,
       entidad_tipo: 'exercise',
       entidad_id: ejercicio._id,
     });
@@ -220,12 +224,14 @@ exports.eliminarEjercicio = async (req, res, next) => {
 exports.responderEjercicio = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { respuesta } = req.body;
     const estudianteId = req.usuarioId;
 
-    if (!respuesta) {
+    if (req.body.respuesta === undefined || req.body.respuesta === null || req.body.respuesta === '') {
       return respuestaError(res, 'La respuesta es requerida', 400);
     }
+
+    // Aceptar números y booleanos (el cliente puede enviar índices o true/false)
+    const respuesta = String(req.body.respuesta);
 
     // Obtener ejercicio
     const ejercicio = await Exercise.findById(id);
@@ -239,13 +245,7 @@ exports.responderEjercicio = async (req, res, next) => {
     }
 
     // Comparar respuestas
-    let esCorrecta = false;
-
-    if (ejercicio.tipo === constants.EXERCISE_TYPES.TRUE_FALSE) {
-      esCorrecta = respuesta.toLowerCase() === ejercicio.respuesta_correcta.toLowerCase();
-    } else {
-      esCorrecta = compararRespuestas(respuesta, ejercicio.respuesta_correcta);
-    }
+    const esCorrecta = compararRespuestas(respuesta, ejercicio.respuesta_correcta);
 
     // Calcular puntos
     const puntosGanados = esCorrecta ? ejercicio.puntos : 0;
@@ -267,12 +267,6 @@ exports.responderEjercicio = async (req, res, next) => {
     });
 
     if (progreso) {
-      progreso.ejercicios_respondidos += 1;
-      if (esCorrecta) {
-        progreso.ejercicios_correctos += 1;
-      }
-      progreso.puntos_obtenidos += puntosGanados;
-
       // Calcular puntos totales de la lección
       const ejerciciosLeccion = await Exercise.countDocuments({
         leccion_id: ejercicio.leccion_id,
@@ -282,15 +276,30 @@ exports.responderEjercicio = async (req, res, next) => {
         { $match: { leccion_id: ejercicio.leccion_id, activo: true } },
         { $group: { _id: null, total: { $sum: '$puntos' } } },
       ]);
-
       progreso.puntos_totales = puntosTotales[0]?.total || 0;
-      progreso.porcentaje_completado = calcularPorcentaje(
-        progreso.ejercicios_respondidos,
+
+      // Con reintentos los contadores no deben superar los máximos del esquema
+      progreso.ejercicios_respondidos = Math.min(
+        progreso.ejercicios_respondidos + 1,
         ejerciciosLeccion
+      );
+      if (esCorrecta) {
+        progreso.ejercicios_correctos = Math.min(
+          progreso.ejercicios_correctos + 1,
+          ejerciciosLeccion
+        );
+      }
+      progreso.puntos_obtenidos = Math.min(
+        progreso.puntos_obtenidos + puntosGanados,
+        progreso.puntos_totales
+      );
+      progreso.porcentaje_completado = Math.min(
+        100,
+        calcularPorcentaje(progreso.ejercicios_respondidos, ejerciciosLeccion)
       );
 
       // Marcar como completado si respondió todos los ejercicios
-      if (progreso.ejercicios_respondidos === ejerciciosLeccion) {
+      if (progreso.ejercicios_respondidos >= ejerciciosLeccion) {
         progreso.estado = constants.PROGRESS_STATUS.COMPLETED;
         progreso.fecha_completado = new Date();
       }
@@ -298,12 +307,9 @@ exports.responderEjercicio = async (req, res, next) => {
       await progreso.save();
     }
 
-    // Actualizar puntos totales del usuario
-    const usuario = await User.findById(estudianteId);
-    if (usuario) {
-      usuario.puntos_totales += puntosGanados;
-      await usuario.save();
-    }
+    // Nota: los puntos totales del usuario se otorgan al completar la
+    // lección/nivel (progressController), no por respuesta individual —
+    // responder repetidamente el mismo ejercicio no acumula puntos
 
     // Registrar en logs
     await Log.create({
