@@ -230,12 +230,16 @@ exports.obtenerEstudiantesAdmin = async (req, res, next) => {
     const { pagina = 1, limite = 50, orden = 'desc' } = req.query;
     const { skip, limit } = paginar(pagina, limite);
 
-    const usuarios = await User.find({ rol: 'student' })
+    // Estudiantes y organizadores (los admins no se listan aquí),
+    // con su organización para mostrarla y poder reasignarla
+    const filtro = { rol: { $in: ['student', 'organizador'] } };
+    const usuarios = await User.find(filtro)
+      .populate('organizacion_id', 'nombre sector codigo')
       .skip(skip)
       .limit(limit)
       .sort({ puntos_totales: orden === 'asc' ? 1 : -1 });
 
-    const total = await User.countDocuments({ rol: 'student' });
+    const total = await User.countDocuments(filtro);
     return respuestaExito(res, respuestaPaginada(usuarios, total, pagina, limite), 'Estudiantes obtenidos');
   } catch (error) {
     next(error);
@@ -274,10 +278,10 @@ exports.darMedalla = async (req, res, next) => {
   }
 };
 
-// Actualizar el propio perfil (nombre y/o contraseña)
+// Actualizar el propio perfil (nombre, contraseña y/o foto)
 exports.actualizarPerfil = async (req, res, next) => {
   try {
-    const { nombre, contrasena } = req.body;
+    const { nombre, contrasena, foto } = req.body;
 
     const usuario = await User.findById(req.usuarioId).select('+contrasena');
     if (!usuario) {
@@ -297,6 +301,16 @@ exports.actualizarPerfil = async (req, res, next) => {
         return respuestaError(res, 'La contraseña debe tener al menos 6 caracteres', 400);
       }
       usuario.contrasena = contrasena; // el pre-save la hashea
+    }
+
+    // Foto: '' la quita; se valida formato y tamaño
+    if (foto !== undefined) {
+      const { validarFoto } = require('../utils/foto');
+      const errorFoto = validarFoto(foto);
+      if (errorFoto) {
+        return respuestaError(res, errorFoto, 400);
+      }
+      usuario.foto = foto;
     }
 
     await usuario.save();

@@ -5,7 +5,6 @@ const levelSchema = new mongoose.Schema(
     nombre: {
       type: String,
       required: [true, 'El nombre del nivel es requerido'],
-      unique: true,
       trim: true,
       minlength: [3, 'El nombre debe tener al menos 3 caracteres'],
     },
@@ -17,7 +16,6 @@ const levelSchema = new mongoose.Schema(
     numero: {
       type: Number,
       required: [true, 'El número del nivel es requerido'],
-      unique: true,
     },
     dificultad: {
       type: String,
@@ -32,13 +30,23 @@ const levelSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // null = nivel público (para usuarios sin organización).
+    // Con valor = nivel exclusivo de esa organización.
+    organizacion_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Organization',
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Índice para ordenar por número
+// Índice para ordenar por número. El nombre/número son únicos DENTRO de cada
+// organización (dos orgs distintas pueden tener un "Nivel 1" cada una).
 levelSchema.index({ numero: 1 });
+levelSchema.index({ organizacion_id: 1, nombre: 1 }, { unique: true });
 
 module.exports = mongoose.model('Level', levelSchema);

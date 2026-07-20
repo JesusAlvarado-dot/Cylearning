@@ -27,6 +27,12 @@ router.post(
   authController.login
 );
 
+// Login / registro con Google (recibe idToken ya verificado por Google en el cliente)
+router.post(
+  '/google',
+  authController.loginGoogle
+);
+
 // Logout (requiere autenticación)
 router.post(
   '/logout',

@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/avatar.dart';
 
 const _kBg     = Color(0xFFFFF9F2);
 const _kDark   = Color(0xFF1C1140);
@@ -31,6 +35,85 @@ class _PerfilScreenState extends State<PerfilScreen>
 
   @override
   void dispose() { _floatCtrl.dispose(); super.dispose(); }
+
+  // Cambiar o quitar la foto de perfil (galería o cámara). Se comprime en
+  // el cliente para que el avatar quede pequeño (<300KB).
+  Future<void> _cambiarFoto(AuthProvider auth) async {
+    final tieneFoto = (auth.usuario?.foto ?? '').isNotEmpty;
+    final opcion = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: _kBg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            const Text('Foto de perfil',
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w900, color: _kDark)),
+            ListTile(
+              leading: const Text('🖼️', style: TextStyle(fontSize: 22)),
+              title: const Text('Elegir de la galería'),
+              onTap: () => Navigator.pop(ctx, 'galeria'),
+            ),
+            ListTile(
+              leading: const Text('📷', style: TextStyle(fontSize: 22)),
+              title: const Text('Tomar una foto'),
+              onTap: () => Navigator.pop(ctx, 'camara'),
+            ),
+            if (tieneFoto)
+              ListTile(
+                leading: const Text('🗑️', style: TextStyle(fontSize: 22)),
+                title: const Text('Quitar la foto'),
+                onTap: () => Navigator.pop(ctx, 'quitar'),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (opcion == null || !mounted) return;
+
+    try {
+      String? nuevaFoto;
+      if (opcion == 'quitar') {
+        nuevaFoto = '';
+      } else {
+        final picker = ImagePicker();
+        final archivo = await picker.pickImage(
+          source: opcion == 'camara'
+              ? ImageSource.camera
+              : ImageSource.gallery,
+          maxWidth: 400,
+          maxHeight: 400,
+          imageQuality: 70,
+        );
+        if (archivo == null) return;
+        final bytes = await archivo.readAsBytes();
+        if (bytes.lengthInBytes > 300 * 1024) {
+          throw Exception('La imagen es demasiado grande. Elige otra.');
+        }
+        nuevaFoto = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      }
+
+      await auth.actualizarPerfil(foto: nuevaFoto);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(opcion == 'quitar'
+            ? 'Foto eliminada'
+            : '📸 ¡Foto de perfil actualizada!'),
+        backgroundColor: const Color(0xFF059669),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: Colors.red.shade600,
+      ));
+    }
+  }
 
   // Editar nombre y/o contraseña (contraseña vacía = no cambiarla)
   Future<void> _dlgEditarPerfil(AuthProvider auth) async {
@@ -263,43 +346,55 @@ class _PerfilScreenState extends State<PerfilScreen>
 
                       const SizedBox(height: 20),
 
-                      // ── Avatar ──────────────────────────────────────────
+                      // ── Avatar (tócalo para cambiar la foto) ────────────
                       Center(
                         child: AnimatedBuilder(
                           animation: _floatAnim,
                           builder: (_, child) => Transform.translate(
                             offset: Offset(0, _floatAnim.value), child: child),
-                          child: Stack(
-                            alignment: Alignment.bottomRight,
-                            children: [
-                              Container(
-                                width: 110, height: 110,
-                                decoration: BoxDecoration(
-                                  color: accentBg,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: accent, width: 3),
-                                  boxShadow: [BoxShadow(
-                                    color: accent.withValues(alpha: 0.25),
-                                    blurRadius: 24, offset: const Offset(0, 12))],
+                          child: GestureDetector(
+                            onTap: () => _cambiarFoto(auth),
+                            child: Stack(
+                              alignment: Alignment.bottomRight,
+                              children: [
+                                Container(
+                                  width: 110, height: 110,
+                                  decoration: BoxDecoration(
+                                    color: accentBg,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: accent, width: 3),
+                                    boxShadow: [BoxShadow(
+                                      color: accent.withValues(alpha: 0.25),
+                                      blurRadius: 24, offset: const Offset(0, 12))],
+                                  ),
+                                  child: usuario.foto.isEmpty
+                                      ? Center(
+                                          child: Text(inicial, style: TextStyle(
+                                            fontSize: 46, fontWeight: FontWeight.w900,
+                                            color: accent)),
+                                        )
+                                      : ClipOval(
+                                          child: Avatar(
+                                            foto: usuario.foto,
+                                            nombre: usuario.nombre,
+                                            radio: 52,
+                                            color: accent,
+                                          ),
+                                        ),
                                 ),
-                                child: Center(
-                                  child: Text(inicial, style: TextStyle(
-                                    fontSize: 46, fontWeight: FontWeight.w900,
-                                    color: accent)),
+                                Container(
+                                  width: 34, height: 34,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: accent.withValues(alpha: 0.3), width: 2)),
+                                  child: const Center(
+                                    child: Icon(Icons.photo_camera_rounded,
+                                        size: 17, color: _kPurple)),
                                 ),
-                              ),
-                              Container(
-                                width: 34, height: 34,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                      color: accent.withValues(alpha: 0.3), width: 2)),
-                                child: Center(
-                                  child: Text(roleEmoji,
-                                      style: const TextStyle(fontSize: 16))),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

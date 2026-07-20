@@ -26,6 +26,21 @@ const topicSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Personaje que aparece en el caminito de lecciones de este tema
+    // (índice del muñequillo elegido por el organizador; null = rotación automática)
+    mascota: {
+      type: Number,
+      min: 0,
+      max: 4,
+      default: null,
+    },
+    // Mensaje personalizado del personaje ('' = mensajes automáticos)
+    mensaje_mascota: {
+      type: String,
+      trim: true,
+      maxlength: [200, 'El mensaje no puede exceder 200 caracteres'],
+      default: '',
+    },
   },
   {
     timestamps: true,

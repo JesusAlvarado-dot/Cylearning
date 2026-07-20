@@ -21,7 +21,7 @@ const logSchema = new mongoose.Schema(
     entidad_tipo: {
       type: String,
       enum: {
-        values: ['user', 'exercise', 'level', 'topic', 'lesson', 'progress'],
+        values: ['user', 'exercise', 'level', 'topic', 'lesson', 'progress', 'organization'],
         message: 'Tipo de entidad no válido',
       },
       default: undefined,

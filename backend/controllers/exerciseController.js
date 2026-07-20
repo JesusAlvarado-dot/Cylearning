@@ -2,6 +2,10 @@ const Exercise = require('../models/Exercise');
 const Lesson = require('../models/Lesson');
 const ExerciseHistory = require('../models/ExerciseHistory');
 const StudentProgress = require('../models/StudentProgress');
+const User = require('../models/User');
+const { registrarActividad } = require('../utils/streak');
+const { puedeTocarLeccion, nivelesDelAlcance } = require('../utils/orgScope');
+const Topic = require('../models/Topic');
 const { respuestaExito, respuestaError, respuestaPaginada, paginar, compararRespuestas, calcularPorcentaje, ocultarRespuesta } = require('../utils/helpers');
 const constants = require('../config/constants');
 const Log = require('../models/Log');
@@ -28,6 +32,10 @@ exports.crearEjercicio = async (req, res, next) => {
         constants.ERROR_MESSAGES.LESSON_NOT_FOUND,
         404
       );
+    }
+
+    if (!(await puedeTocarLeccion(req, leccion_id))) {
+      return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
     }
 
     const ejercicio = new Exercise({
@@ -74,6 +82,18 @@ exports.obtenerTodosLosEjercicios = async (req, res, next) => {
     if (leccion_id) filtro.leccion_id = leccion_id;
     if (activo !== undefined) filtro.activo = activo === 'true';
 
+    // Organizador: limitar a ejercicios de lecciones de su organización
+    const alcance = await nivelesDelAlcance(req);
+    if (alcance !== null && req.rol === constants.ROLES.ORGANIZER) {
+      const temasOrg = await Topic.find({ nivel_id: { $in: alcance } }).select('_id');
+      const leccionesOrg = await Lesson.find({ tema_id: { $in: temasOrg.map((t) => t._id) } }).select('_id');
+      const leccionIds = leccionesOrg.map((l) => l._id.toString());
+      if (leccion_id && !leccionIds.includes(leccion_id)) {
+        return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+      }
+      if (!leccion_id) filtro.leccion_id = { $in: leccionesOrg.map((l) => l._id) };
+    }
+
     let ejercicios = await Exercise.find(filtro)
       .skip(skip)
       .limit(limit)
@@ -82,7 +102,7 @@ exports.obtenerTodosLosEjercicios = async (req, res, next) => {
       .sort({ orden: 1 });
 
     // Los estudiantes no deben recibir la respuesta correcta
-    if (req.rol !== constants.ROLES.ADMIN) {
+    if (req.rol !== constants.ROLES.ADMIN && req.rol !== constants.ROLES.ORGANIZER) {
       ejercicios = ejercicios.map(ocultarRespuesta);
     }
 
@@ -117,9 +137,10 @@ exports.obtenerEjercicioPorId = async (req, res, next) => {
       );
     }
 
+    const esGestor = req.rol === constants.ROLES.ADMIN || req.rol === constants.ROLES.ORGANIZER;
     return respuestaExito(
       res,
-      req.rol === constants.ROLES.ADMIN ? ejercicio : ocultarRespuesta(ejercicio),
+      esGestor ? ejercicio : ocultarRespuesta(ejercicio),
       'Ejercicio obtenido exitosamente'
     );
   } catch (error) {
@@ -141,6 +162,11 @@ exports.actualizarEjercicio = async (req, res, next) => {
       orden,
       activo,
     } = req.body;
+
+    const existente = await Exercise.findById(id).select('leccion_id');
+    if (existente && !(await puedeTocarLeccion(req, existente.leccion_id))) {
+      return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+    }
 
     const ejercicio = await Exercise.findByIdAndUpdate(
       id,
@@ -186,10 +212,15 @@ exports.actualizarEjercicio = async (req, res, next) => {
   }
 };
 
-// Eliminar ejercicio (solo admin)
+// Eliminar ejercicio (admin u organizador dueño)
 exports.eliminarEjercicio = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    const previo = await Exercise.findById(id).select('leccion_id');
+    if (previo && !(await puedeTocarLeccion(req, previo.leccion_id))) {
+      return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+    }
 
     const ejercicio = await Exercise.findByIdAndDelete(id);
 
@@ -311,6 +342,18 @@ exports.responderEjercicio = async (req, res, next) => {
     // lección/nivel (progressController), no por respuesta individual —
     // responder repetidamente el mismo ejercicio no acumula puntos
 
+    // La racha diaria se activa con al menos un ejercicio por día
+    const usuario = await User.findById(estudianteId);
+    let racha = usuario?.racha ?? 0;
+    let rachaRecuperable = 0;
+    let reanudacionesRestantes = 0;
+    if (usuario) {
+      if (registrarActividad(usuario)) await usuario.save();
+      racha = usuario.racha;
+      rachaRecuperable = usuario.racha_recuperable || 0;
+      reanudacionesRestantes = usuario.reanudacionesRestantes();
+    }
+
     // Registrar en logs
     await Log.create({
       tipo: constants.LOG_TYPES.EXERCISE_ANSWERED,
@@ -330,6 +373,9 @@ exports.responderEjercicio = async (req, res, next) => {
         explicacion: ejercicio.explicacion,
         respuesta_correcta: ejercicio.respuesta_correcta,
         progreso,
+        racha,
+        racha_recuperable: rachaRecuperable,
+        reanudaciones_restantes: reanudacionesRestantes,
       },
       esCorrecta ? 'Respuesta correcta' : 'Respuesta incorrecta'
     );

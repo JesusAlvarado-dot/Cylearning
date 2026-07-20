@@ -254,8 +254,8 @@ GET    /api/admin/ranking/estudiantes
 
 ```bash
 # Database
-MONGODB_URI=mongodb://localhost:27017/app-escuela
-MONGODB_TEST_URI=mongodb://localhost:27017/app-escuela-test
+MONGODB_URI=mongodb://localhost:27017/cylearn
+MONGODB_TEST_URI=mongodb://localhost:27017/cylearn_test
 
 # JWT
 JWT_SECRET=tu_secret_key_muy_seguro

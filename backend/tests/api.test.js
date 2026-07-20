@@ -7,7 +7,7 @@ process.env.NODE_ENV = 'test';
 require('dotenv').config();
 
 // Derivar la URI de test insertando un nombre de base de datos propio
-const baseUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/app-escuela';
+const baseUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/cylearn';
 process.env.MONGODB_TEST_URI = baseUri.includes('mongodb.net/?')
   ? baseUri.replace('mongodb.net/?', 'mongodb.net/cylearn_test?')
   : 'mongodb://localhost:27017/cylearn_test';

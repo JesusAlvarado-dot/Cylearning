@@ -7,8 +7,9 @@ const Progreso = require('../models/Progreso');
 const { respuestaExito, respuestaError, respuestaPaginada, paginar, ocultarRespuesta } = require('../utils/helpers');
 const constants = require('../config/constants');
 const Log = require('../models/Log');
+const { puedeTocarTema, puedeTocarLeccion, nivelesDelAlcance } = require('../utils/orgScope');
 
-// Crear lección (solo admin)
+// Crear lección (admin u organizador sobre temas de su organización)
 exports.crearLeccion = async (req, res, next) => {
   try {
     const { nombre, descripcion, tema_id, contenido, orden, punto_minimo } = req.body;
@@ -21,6 +22,10 @@ exports.crearLeccion = async (req, res, next) => {
         constants.ERROR_MESSAGES.TOPIC_NOT_FOUND,
         404
       );
+    }
+
+    if (!(await puedeTocarTema(req, tema_id))) {
+      return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
     }
 
     const leccion = new Lesson({
@@ -63,6 +68,17 @@ exports.obtenerTodasLasLecciones = async (req, res, next) => {
     const filtro = {};
     if (tema_id) filtro.tema_id = tema_id;
     if (activo !== undefined) filtro.activo = activo === 'true';
+
+    // Organizador: limitar a lecciones cuyos temas pertenecen a su organización
+    const alcance = await nivelesDelAlcance(req);
+    if (alcance !== null) {
+      const temasPermitidos = await Topic.find({ nivel_id: { $in: alcance } }).select('_id');
+      const temaIds = temasPermitidos.map((t) => t._id.toString());
+      if (tema_id && !temaIds.includes(tema_id)) {
+        return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+      }
+      if (!tema_id) filtro.tema_id = { $in: temasPermitidos.map((t) => t._id) };
+    }
 
     const lecciones = await Lesson.find(filtro)
       .skip(skip)
@@ -111,7 +127,7 @@ exports.obtenerLeccionPorId = async (req, res, next) => {
     }).sort({ orden: 1 });
 
     // Los estudiantes no deben recibir la respuesta correcta
-    if (req.rol !== constants.ROLES.ADMIN) {
+    if (req.rol !== constants.ROLES.ADMIN && req.rol !== constants.ROLES.ORGANIZER) {
       ejercicios = ejercicios.map(ocultarRespuesta);
     }
 
@@ -125,11 +141,15 @@ exports.obtenerLeccionPorId = async (req, res, next) => {
   }
 };
 
-// Actualizar lección (solo admin)
+// Actualizar lección (admin u organizador dueño)
 exports.actualizarLeccion = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { nombre, descripcion, contenido, orden, activo, punto_minimo } = req.body;
+
+    if (!(await puedeTocarLeccion(req, id))) {
+      return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+    }
 
     const leccion = await Lesson.findByIdAndUpdate(
       id,
@@ -164,10 +184,14 @@ exports.actualizarLeccion = async (req, res, next) => {
   }
 };
 
-// Eliminar lección (solo admin) — borrado en cascada de sus ejercicios
+// Eliminar lección (admin u organizador dueño) — cascada de sus ejercicios
 exports.eliminarLeccion = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    if (!(await puedeTocarLeccion(req, id))) {
+      return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+    }
 
     const leccion = await Lesson.findById(id);
     if (!leccion) {

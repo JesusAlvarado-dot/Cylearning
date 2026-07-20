@@ -1,8 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../models/models.dart';
+import '../widgets/avatar.dart';
+
+part 'admin_org_tabs.dart';
 
 const _bg = Color(0xFFFFF9F2);
 const _purple = Color(0xFF6B46F6);
@@ -27,18 +34,26 @@ class AdminScreen extends StatefulWidget {
 }
 
 class _AdminScreenState extends State<AdminScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+    with TickerProviderStateMixin {
+  TabController? _tabController;
+  bool _esAdmin = false;
 
   @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // El admin (dueños de la app) ve todas las pestañas; el organizador solo
+    // gestiona el contenido de su organización y su configuración
+    final esAdmin = context.read<AuthProvider>().usuario?.rol == 'admin';
+    if (_tabController == null || esAdmin != _esAdmin) {
+      _esAdmin = esAdmin;
+      _tabController?.dispose();
+      _tabController = TabController(length: esAdmin ? 4 : 2, vsync: this);
+    }
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
@@ -104,16 +119,24 @@ class _AdminScreenState extends State<AdminScreen>
                   ),
                   TabBar(
                     controller: _tabController,
+                    isScrollable: _esAdmin,
                     indicatorColor: _yellow,
                     indicatorWeight: 3,
                     labelColor: Colors.white,
                     unselectedLabelColor: const Color(0xFFD4C8FF),
                     labelStyle: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 13),
-                    tabs: const [
-                      Tab(text: '👤 Usuarios'),
-                      Tab(text: '📚 Contenido'),
-                    ],
+                    tabs: _esAdmin
+                        ? const [
+                            Tab(text: '👤 Usuarios'),
+                            Tab(text: '📚 Contenido'),
+                            Tab(text: '🏫 Organizaciones'),
+                            Tab(text: '📩 Solicitudes'),
+                          ]
+                        : const [
+                            Tab(text: '📚 Contenido'),
+                            Tab(text: '🎨 Mi organización'),
+                          ],
                   ),
                 ],
               ),
@@ -122,10 +145,17 @@ class _AdminScreenState extends State<AdminScreen>
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              children: const [
-                _UsuariosTab(),
-                _ContenidoTab(),
-              ],
+              children: _esAdmin
+                  ? const [
+                      _UsuariosTab(),
+                      _ContenidoTab(),
+                      _OrganizacionesTab(),
+                      _SolicitudesTab(),
+                    ]
+                  : const [
+                      _ContenidoTab(),
+                      _MiOrganizacionTab(),
+                    ],
             ),
           ),
         ],
@@ -184,6 +214,105 @@ class _UsuariosTabState extends State<_UsuariosTab> {
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ));
+  }
+
+  // Asignar/quitar organización de un usuario, con opción de hacerlo
+  // organizador (gestiona el contenido de su organización)
+  Future<void> _dlgAsignarOrg(EstudianteRanking est) async {
+    List<Organizacion> orgs;
+    try {
+      orgs = await ApiService.getOrganizaciones();
+    } catch (e) {
+      _snack(_extractMsg(e), color: _red);
+      return;
+    }
+    if (!mounted) return;
+
+    String? orgId; // null = sin organización (contenido público)
+    bool esOrganizador = false;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          backgroundColor: _bg,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Organización de ${est.nombre}',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900, color: _dark, fontSize: 16)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String?>(
+                initialValue: orgId,
+                decoration: InputDecoration(
+                  labelText: 'Organización',
+                  prefixIcon:
+                      const Icon(Icons.business_rounded, color: _purple),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: const Color(0xFFF5F4FF),
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('🌍 Sin organización (público)')),
+                  for (final o in orgs)
+                    DropdownMenuItem<String?>(
+                        value: o.id,
+                        child: Text(
+                            '${(sectoresDisponibles[o.sector] ?? ('🏫', ''))
+                                .$1} ${o.nombre}',
+                            overflow: TextOverflow.ellipsis)),
+                ],
+                onChanged: (v) => setLocal(() {
+                  orgId = v;
+                  if (v == null) esOrganizador = false;
+                }),
+              ),
+              SwitchListTile(
+                value: esOrganizador,
+                activeThumbColor: _green,
+                title: const Text('Hacerlo organizador',
+                    style: TextStyle(fontSize: 14, color: _dark)),
+                subtitle: const Text(
+                    'Podrá crear y editar el contenido de su organización',
+                    style: TextStyle(fontSize: 11, color: _muted)),
+                onChanged:
+                    orgId == null ? null : (v) => setLocal(() => esOrganizador = v),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child:
+                    const Text('Cancelar', style: TextStyle(color: _muted))),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: _purple),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ApiService.asignarUsuarioOrganizacion(
+        est.id,
+        organizacionId: orgId,
+        rol: orgId == null
+            ? 'student'
+            : (esOrganizador ? 'organizador' : 'student'),
+      );
+      _snack('Usuario actualizado');
+      _cargar();
+    } catch (e) {
+      _snack(_extractMsg(e), color: _red);
+    }
   }
 
   Future<void> _dlgCrearUsuario() async {
@@ -324,6 +453,7 @@ class _UsuariosTabState extends State<_UsuariosTab> {
                 posicion: i + 1,
                 onEdit: () => _dlgEditarUsuario(_usuarios[i]),
                 onDelete: () => _confirmarEliminarUsuario(_usuarios[i]),
+                onOrg: () => _dlgAsignarOrg(_usuarios[i]),
               ),
             ),
           );
@@ -338,12 +468,14 @@ class _UsuarioCard extends StatelessWidget {
   final int posicion;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback? onOrg;
 
   const _UsuarioCard({
     required this.est,
     required this.posicion,
     required this.onEdit,
     required this.onDelete,
+    this.onOrg,
   });
 
   @override
@@ -365,17 +497,7 @@ class _UsuarioCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: _purple.withValues(alpha: 0.12),
-              child: Text(
-                est.nombre.isNotEmpty ? est.nombre[0].toUpperCase() : '?',
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: _purple),
-              ),
-            ),
+            Avatar(foto: est.foto, nombre: est.nombre, radio: 22, color: _purple),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -424,6 +546,12 @@ class _UsuarioCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (onOrg != null)
+              _IconActionBtn(
+                  icon: Icons.business_rounded,
+                  color: _purple,
+                  tooltip: 'Asignar organización',
+                  onTap: onOrg!),
             _IconActionBtn(
                 icon: Icons.edit_rounded,
                 color: _muted,
@@ -797,34 +925,88 @@ class _ContenidoTabState extends State<_ContenidoTab> {
         TextEditingController(text: tema['nombre'] as String? ?? '');
     final descCtrl =
         TextEditingController(text: tema['descripcion'] as String? ?? '');
+    final mensajeCtrl =
+        TextEditingController(text: tema['mensaje_mascota'] as String? ?? '');
+    int? mascota = tema['mascota'] as int?;
+
+    // Los 5 muñequillos del caminito (mismo orden que en nivel_detail)
+    const munequillos = ['🎒', '⭐', '😎', '🔥', '💪'];
 
     await showDialog(
       context: context,
-      builder: (ctx) => _AdminDialog(
-        titulo: 'Editar Tema',
-        icon: Icons.edit_rounded,
-        color: _yellow,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _campo(nombreCtrl, 'Nombre del tema', Icons.title_rounded),
-            const SizedBox(height: 10),
-            _campo(descCtrl, 'Descripción', Icons.notes_rounded),
-          ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => _AdminDialog(
+          titulo: 'Editar Tema',
+          icon: Icons.edit_rounded,
+          color: _yellow,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _campo(nombreCtrl, 'Nombre del tema', Icons.title_rounded),
+              const SizedBox(height: 10),
+              _campo(descCtrl, 'Descripción', Icons.notes_rounded),
+              const SizedBox(height: 14),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Muñequillo del caminito',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _muted)),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  for (int m = 0; m < munequillos.length; m++)
+                    GestureDetector(
+                      onTap: () =>
+                          setLocal(() => mascota = mascota == m ? null : m),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: mascota == m
+                              ? _purple.withValues(alpha: 0.15)
+                              : const Color(0xFFF5F4FF),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color:
+                                  mascota == m ? _purple : Colors.transparent,
+                              width: 2),
+                        ),
+                        child: Text(munequillos[m],
+                            style: const TextStyle(fontSize: 22)),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Sin selección = rotación automática',
+                    style: TextStyle(fontSize: 10, color: _muted)),
+              ),
+              const SizedBox(height: 10),
+              _campo(mensajeCtrl, 'Mensaje del personaje (opcional)',
+                  Icons.chat_bubble_rounded, maxLines: 2),
+            ],
+          ),
+          onGuardar: () async {
+            if (nombreCtrl.text.trim().length < 2) {
+              throw Exception('El nombre debe tener al menos 2 caracteres');
+            }
+            await ApiService.actualizarTema(tema['_id'] as String, {
+              'nombre': nombreCtrl.text.trim(),
+              'descripcion': descCtrl.text.trim(),
+              'mascota': mascota,
+              'mensaje_mascota': mensajeCtrl.text.trim(),
+            });
+          },
+          onExito: () {
+            _snack('Tema actualizado');
+            _cargarTemasDelNivel(_nivelSel!.id);
+          },
         ),
-        onGuardar: () async {
-          if (nombreCtrl.text.trim().length < 2) {
-            throw Exception('El nombre debe tener al menos 2 caracteres');
-          }
-          await ApiService.actualizarTema(tema['_id'] as String, {
-            'nombre': nombreCtrl.text.trim(),
-            'descripcion': descCtrl.text.trim(),
-          });
-        },
-        onExito: () {
-          _snack('Tema actualizado');
-          _cargarTemasDelNivel(_nivelSel!.id);
-        },
       ),
     );
   }
@@ -1186,26 +1368,141 @@ class _ContenidoTabState extends State<_ContenidoTab> {
     if (_niveles.isEmpty) {
       return const _EmptyView(emoji: '📚', msg: 'Sin niveles. Crea el primero.');
     }
-    return RefreshIndicator(
-      color: _purple,
-      onRefresh: _cargarNiveles,
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-        itemCount: _niveles.length,
-        itemBuilder: (_, i) {
-          final nv = _niveles[i];
-          final emojis = ['🌱', '🔥', '⚡', '🚀', '💎', '🌟', '🏆'];
-          final emoji = emojis[nv.orden % emojis.length];
-          return _NivelCard(
-            nivel: nv,
-            emoji: emoji,
-            onTap: () => setState(() => _drillNivel(nv)),
-            onEdit: () => _dlgEditarNivel(nv),
-            onDelete: () => _confirmarEliminarNivel(nv),
-          );
-        },
+    return Column(
+      children: [
+        if (_niveles.length > 1)
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 16, top: 4),
+              child: TextButton.icon(
+                onPressed: _dlgReordenarNiveles,
+                icon: const Icon(Icons.swap_vert_rounded,
+                    size: 18, color: _purple),
+                label: const Text('Reordenar',
+                    style: TextStyle(
+                        color: _purple, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ),
+        Expanded(
+          child: RefreshIndicator(
+            color: _purple,
+            onRefresh: _cargarNiveles,
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+              itemCount: _niveles.length,
+              itemBuilder: (_, i) {
+                final nv = _niveles[i];
+                final emojis = ['🌱', '🔥', '⚡', '🚀', '💎', '🌟', '🏆'];
+                final emoji = emojis[nv.orden % emojis.length];
+                return _NivelCard(
+                  nivel: nv,
+                  emoji: emoji,
+                  onTap: () => setState(() => _drillNivel(nv)),
+                  onEdit: () => _dlgEditarNivel(nv),
+                  onDelete: () => _confirmarEliminarNivel(nv),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Reordenar niveles arrastrándolos: el orden resultante es el orden
+  // exacto en que los verán los estudiantes (independiente de dificultad)
+  Future<void> _dlgReordenarNiveles() async {
+    final lista = List<Nivel>.from(_niveles);
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          backgroundColor: _bg,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Reordenar niveles',
+              style: TextStyle(fontWeight: FontWeight.w900, color: _dark)),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 360,
+            child: Column(
+              children: [
+                const Text(
+                  'Arrastra cada nivel a la posición en que debe aparecer',
+                  style: TextStyle(fontSize: 12, color: _muted),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ReorderableListView.builder(
+                    itemCount: lista.length,
+                    onReorderItem: (oldIndex, newIndex) {
+                      setLocal(() {
+                        final item = lista.removeAt(oldIndex);
+                        lista.insert(newIndex, item);
+                      });
+                    },
+                    itemBuilder: (_, i) => Container(
+                      key: ValueKey(lista[i].id),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFEDE9FE)),
+                      ),
+                      child: ListTile(
+                        dense: true,
+                        leading: CircleAvatar(
+                          radius: 14,
+                          backgroundColor: _purple.withValues(alpha: 0.1),
+                          child: Text('${i + 1}',
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w900,
+                                  color: _purple)),
+                        ),
+                        title: Text(lista[i].nombre,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: _dark)),
+                        trailing: const Icon(Icons.drag_handle_rounded,
+                            color: _muted),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar',
+                  style: TextStyle(color: _muted)),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: _purple),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Guardar orden'),
+            ),
+          ],
+        ),
       ),
     );
+
+    if (confirmado != true) return;
+    try {
+      await ApiService.reordenarNiveles([
+        for (var i = 0; i < lista.length; i++)
+          {'id': lista[i].id, 'orden': i + 1},
+      ]);
+      _snack('Orden de niveles actualizado');
+      await _cargarNiveles();
+    } catch (e) {
+      _snack(e.toString().replaceFirst('Exception: ', ''));
+    }
   }
 
   Widget _buildTemas() {

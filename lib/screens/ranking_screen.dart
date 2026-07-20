@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../widgets/avatar.dart';
 
 const _kBg     = Color(0xFFFFF9F2);
 const _kDark   = Color(0xFF1C1140);
@@ -18,20 +19,35 @@ class RankingScreen extends StatefulWidget {
 
 class _RankingScreenState extends State<RankingScreen> {
   late Future<List<EstudianteRanking>> _rankingF;
+  // 'global' = toda la app; 'organizacion' = solo mi clase/organización
+  String _alcance = 'global';
 
   @override
   void initState() {
     super.initState();
-    _rankingF = ApiService.getRanking();
+    // Los estudiantes de una organización arrancan viendo SU clase
+    final usuario = context.read<AuthProvider>().usuario;
+    if (usuario?.organizacion != null) _alcance = 'organizacion';
+    _rankingF = ApiService.getRanking(alcance: _alcance);
   }
 
   Future<void> _refresh() async {
-    setState(() => _rankingF = ApiService.getRanking());
+    setState(() => _rankingF = ApiService.getRanking(alcance: _alcance));
+  }
+
+  void _cambiarAlcance(String alcance) {
+    if (alcance == _alcance) return;
+    setState(() {
+      _alcance = alcance;
+      _rankingF = ApiService.getRanking(alcance: alcance);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final myId = context.read<AuthProvider>().usuario?.id ?? '';
+    final usuario = context.read<AuthProvider>().usuario;
+    final myId = usuario?.id ?? '';
+    final tieneOrg = usuario?.organizacion != null;
     return Scaffold(
       backgroundColor: _kBg,
       body: FutureBuilder<List<EstudianteRanking>>(
@@ -51,9 +67,35 @@ class _RankingScreenState extends State<RankingScreen> {
             child: CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(child: _buildHeader()),
+                // Selector Global / Mi clase (solo si pertenece a una org)
+                if (tieneOrg)
+                  SliverToBoxAdapter(
+                    child: _SelectorAlcance(
+                      alcance: _alcance,
+                      nombreOrg: usuario!.organizacion!.nombre,
+                      onCambiar: _cambiarAlcance,
+                    ),
+                  ),
                 if (ranking.isNotEmpty)
                   SliverToBoxAdapter(
                       child: _buildPodium(ranking.take(3).toList(), myId)),
+                if (ranking.isEmpty)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.all(40),
+                      child: Center(
+                        child: Text(
+                          '🏆\nAún no hay nadie en este ranking.\n¡Sé el primero!',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 15,
+                              color: _kMuted,
+                              fontWeight: FontWeight.w600,
+                              height: 1.6),
+                        ),
+                      ),
+                    ),
+                  ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
                   sliver: SliverList(
@@ -289,26 +331,13 @@ class _RankingScreenState extends State<RankingScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          // Avatar
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              color: isMe
-                  ? const Color(0xFFEFEBFF)
-                  : const Color(0xFFF3F4F6),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                entry.nombre.isNotEmpty
-                    ? entry.nombre[0].toUpperCase()
-                    : '?',
-                style: TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.w900,
-                  color: isMe ? _kPurple : _kDark,
-                ),
-              ),
-            ),
+          // Avatar (con foto de perfil si la hay)
+          Avatar(
+            foto: entry.foto,
+            nombre: entry.nombre,
+            radio: 20,
+            color: isMe ? _kPurple : _kDark,
+            fondo: isMe ? const Color(0xFFEFEBFF) : const Color(0xFFF3F4F6),
           ),
           const SizedBox(width: 12),
           // Name + streak
@@ -388,4 +417,63 @@ class _ErrorView extends StatelessWidget {
           ],
         ),
       );
+}
+
+// Selector entre el ranking global y el de la organizacion del usuario
+class _SelectorAlcance extends StatelessWidget {
+  final String alcance;
+  final String nombreOrg;
+  final ValueChanged<String> onCambiar;
+
+  const _SelectorAlcance({
+    required this.alcance,
+    required this.nombreOrg,
+    required this.onCambiar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFEDE9FE)),
+        ),
+        child: Row(
+          children: [
+            _opcion('🏫 Mi clase', 'organizacion'),
+            _opcion('🌍 Global', 'global'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _opcion(String label, String valor) {
+    final activo = alcance == valor;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onCambiar(valor),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: activo ? _kPurple : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: activo ? Colors.white : _kMuted,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -27,11 +27,19 @@ const requiereRol = (rolesPermitidos) => {
 // Middleware específico para administrador
 const requiereAdmin = requiereRol([constants.ROLES.ADMIN]);
 
+// Admin u organizador: acceso al panel de contenido. Los controladores
+// limitan al organizador a los recursos de SU organización.
+const requiereAdminOOrganizador = requiereRol([
+  constants.ROLES.ADMIN,
+  constants.ROLES.ORGANIZER,
+]);
+
 // Middleware específico para estudiante
 const requiereEstudiante = requiereRol([constants.ROLES.STUDENT]);
 
 module.exports = {
   requiereRol,
   requiereAdmin,
+  requiereAdminOOrganizador,
   requiereEstudiante,
 };

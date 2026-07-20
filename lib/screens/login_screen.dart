@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/google_auth_service.dart';
+import '../widgets/solicitud_org_dialog.dart';
 
 const _kBg      = Color(0xFFFFF9F2);
 const _kPurple  = Color(0xFF6B46F6);
@@ -231,6 +233,27 @@ class _LoginScreenState extends State<LoginScreen>
                             onTap: () => _doLogin(auth),
                           ),
                         ),
+                        if (GoogleAuthService.soportado) ...[
+                          const SizedBox(height: 16),
+                          const Row(children: [
+                            Expanded(child: Divider(color: Color(0xFFE5E1F5))),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Text('o continúa con',
+                                style: TextStyle(
+                                  color: _kMuted, fontSize: 12,
+                                  fontWeight: FontWeight.w600)),
+                            ),
+                            Expanded(child: Divider(color: Color(0xFFE5E1F5))),
+                          ]),
+                          const SizedBox(height: 14),
+                          Consumer<AuthProvider>(
+                            builder: (_, auth, __) => _GoogleButton(
+                              loading: auth.cargando,
+                              onTap: () => _doGoogleLogin(auth),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 14),
                         GestureDetector(
                           onTap: () => Navigator.of(context).pushNamed('/registro'),
@@ -248,6 +271,23 @@ class _LoginScreenState extends State<LoginScreen>
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
                               )),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        GestureDetector(
+                          onTap: () => mostrarSolicitudOrganizacion(context),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              '🏫 ¿Eres una organización? Comunícate con nosotros',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: _kMuted,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -269,8 +309,20 @@ class _LoginScreenState extends State<LoginScreen>
         recordar: _recordar);
     if (!mounted) return;
     if (!auth.isAuthenticated) return;
+    await _irSegunRol(auth, nav);
+  }
 
-    if (auth.usuario?.rol == 'admin') {
+  Future<void> _doGoogleLogin(AuthProvider auth) async {
+    final nav = Navigator.of(context);
+    await auth.loginConGoogle(recordar: _recordar);
+    if (!mounted) return;
+    if (!auth.isAuthenticated) return;
+    await _irSegunRol(auth, nav);
+  }
+
+  Future<void> _irSegunRol(AuthProvider auth, NavigatorState nav) async {
+    // Admin y organizador van al panel de gestión
+    if (auth.usuario?.rol == 'admin' || auth.usuario?.rol == 'organizador') {
       nav.pushReplacementNamed('/admin');
       return;
     }
@@ -462,6 +514,58 @@ class _GameButtonState extends State<_GameButton>
         ),
       ),
     ),
+  );
+}
+
+class _GoogleButton extends StatelessWidget {
+  final bool loading;
+  final VoidCallback onTap;
+
+  const _GoogleButton({required this.loading, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: loading ? null : onTap,
+    child: Container(
+      height: 54,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E1F5), width: 1.5),
+      ),
+      child: Center(
+        child: loading
+            ? const SizedBox(
+                width: 22, height: 22,
+                child: CircularProgressIndicator(
+                  color: _kPurple, strokeWidth: 2.5))
+            : const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _GoogleLogoG(),
+                  SizedBox(width: 10),
+                  Text('Continuar con Google', style: TextStyle(
+                    color: _kDark, fontSize: 15, fontWeight: FontWeight.w700)),
+                ],
+              ),
+      ),
+    ),
+  );
+}
+
+// "G" de Google dibujada con los 4 colores de la marca, sin depender de
+// un asset externo.
+class _GoogleLogoG extends StatelessWidget {
+  const _GoogleLogoG();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+    width: 20, height: 20,
+    child: Stack(alignment: Alignment.center, children: [
+      Text('G', style: TextStyle(
+        fontSize: 20, fontWeight: FontWeight.w900,
+        color: Color(0xFF4285F4), height: 1)),
+    ]),
   );
 }
 

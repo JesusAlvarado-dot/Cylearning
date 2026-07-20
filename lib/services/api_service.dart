@@ -63,8 +63,36 @@ class ApiService {
     }
   }
 
+  // Login/registro con Google: manda el idToken obtenido de GoogleAuthService.
+  static Future<Map<String, dynamic>> loginGoogle(String idToken,
+      {String? codigoOrganizacion}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/google'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'idToken': idToken,
+        if (codigoOrganizacion != null && codigoOrganizacion.trim().isNotEmpty)
+          'codigo_organizacion': codigoOrganizacion.trim(),
+      }),
+    ).timeout(_timeout);
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      _token = data['datos']['token'];
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('token', _token!);
+      await prefs.setString('usuario', jsonEncode(data['datos']['usuario']));
+
+      return data;
+    } else {
+      throw Exception(jsonDecode(response.body)['mensaje']);
+    }
+  }
+
   static Future<Map<String, dynamic>> registro(
-      String nombre, String email, String contrasena) async {
+      String nombre, String email, String contrasena,
+      {String? codigoOrganizacion}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/registro'),
       headers: {'Content-Type': 'application/json'},
@@ -72,6 +100,8 @@ class ApiService {
         'nombre': nombre,
         'email': email,
         'contrasena': contrasena,
+        if (codigoOrganizacion != null && codigoOrganizacion.trim().isNotEmpty)
+          'codigo_organizacion': codigoOrganizacion.trim(),
       }),
     ).timeout(_timeout);
 
@@ -129,15 +159,17 @@ class ApiService {
     await prefs.remove('usuario');
   }
 
-  // Actualizar el propio perfil (contraseña vacía = no cambiarla)
+  // Actualizar el propio perfil (contraseña vacía = no cambiarla;
+  // foto: '' la quita, null no la toca)
   static Future<Usuario> actualizarPerfil(
-      {String? nombre, String? contrasena}) async {
+      {String? nombre, String? contrasena, String? foto}) async {
     final response = await http.put(
       Uri.parse('$baseUrl/student/perfil'),
       headers: _headers,
       body: jsonEncode({
         if (nombre != null && nombre.isNotEmpty) 'nombre': nombre,
         if (contrasena != null && contrasena.isNotEmpty) 'contrasena': contrasena,
+        if (foto != null) 'foto': foto,
       }),
     ).timeout(_timeout);
 
@@ -188,6 +220,9 @@ class ApiService {
         for (final leccion in (tema['lecciones'] as List? ?? [])) {
           final l = Map<String, dynamic>.from(leccion as Map);
           l['_tema_nombre'] = temaNombre;
+          // Personalización de la mascota definida en el tema
+          l['_tema_mascota'] = tema['mascota'];
+          l['_tema_mensaje'] = tema['mensaje_mascota'];
           lecciones.add(l);
         }
       }
@@ -270,9 +305,11 @@ class ApiService {
     return {'desbloqueado': false};
   }
 
-  static Future<List<EstudianteRanking>> getRanking() async {
+  // alcance: 'global' (toda la app) u 'organizacion' (solo mi clase/org)
+  static Future<List<EstudianteRanking>> getRanking(
+      {String alcance = 'global'}) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/student/ranking'),
+      Uri.parse('$baseUrl/student/ranking?alcance=$alcance'),
       headers: _headers,
     ).timeout(_timeout);
     if (response.statusCode == 200) {
@@ -461,6 +498,222 @@ class ApiService {
     }
   }
 
+  // ── Organizaciones ────────────────────────────────────────────────────────
+
+  // Solicitud pública desde el login: "¿Eres una organización?"
+  static Future<String> enviarSolicitudOrganizacion({
+    required String nombreOrganizacion,
+    required String email,
+    required String sector,
+    String mensaje = '',
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/public/solicitudes-organizacion'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'nombre_organizacion': nombreOrganizacion,
+        'email': email,
+        'sector': sector,
+        'mensaje': mensaje,
+      }),
+    ).timeout(_timeout);
+    final body = jsonDecode(response.body);
+    if (response.statusCode == 201) {
+      return body['mensaje'] as String? ?? 'Solicitud enviada';
+    }
+    final errores = body['errores'] as List?;
+    if (errores != null && errores.isNotEmpty) {
+      throw Exception(errores.map((e) => e['mensaje']).join('\n'));
+    }
+    throw Exception(body['mensaje'] ?? 'No se pudo enviar la solicitud');
+  }
+
+  // ── ADMIN: organizaciones ──
+  static Future<List<Organizacion>> getOrganizaciones() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/organizaciones'),
+      headers: _headers,
+    ).timeout(_timeout);
+    if (response.statusCode == 200) {
+      final datos = jsonDecode(response.body)['datos'] as List;
+      return datos.map((o) => Organizacion.fromJson(o)).toList();
+    }
+    throw Exception('Error al cargar organizaciones');
+  }
+
+  static Future<Organizacion> crearOrganizacion(
+      String nombre, String sector, String email) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/organizaciones'),
+      headers: _headers,
+      body: jsonEncode({'nombre': nombre, 'sector': sector, 'email': email}),
+    ).timeout(_timeout);
+    final body = jsonDecode(response.body);
+    if (response.statusCode == 201) {
+      return Organizacion.fromJson(body['datos']);
+    }
+    throw Exception(body['mensaje'] ?? 'Error al crear la organización');
+  }
+
+  static Future<void> actualizarOrganizacion(
+      String id, Map<String, dynamic> data) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/organizaciones/$id'),
+      headers: _headers,
+      body: jsonEncode(data),
+    ).timeout(_timeout);
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al actualizar la organización');
+    }
+  }
+
+  static Future<Organizacion> regenerarCodigoOrganizacion(String id,
+      {String tipo = 'estudiante'}) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/organizaciones/$id/regenerar-codigo'),
+      headers: _headers,
+      body: jsonEncode({'tipo': tipo}),
+    ).timeout(_timeout);
+    final body = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return Organizacion.fromJson(body['datos']);
+    }
+    throw Exception(body['mensaje'] ?? 'Error al regenerar el código');
+  }
+
+  // Validar un código de invitación (público): a qué org pertenece y si es
+  // de estudiante o de docente
+  static Future<InfoInvitacion> validarCodigoOrganizacion(
+      String codigo) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/public/codigo/${Uri.encodeComponent(codigo.trim())}'),
+      headers: {'Content-Type': 'application/json'},
+    ).timeout(_timeout);
+    final body = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return InfoInvitacion.fromJson(body['datos']);
+    }
+    throw Exception(body['mensaje'] ?? 'Código inválido');
+  }
+
+  static Future<Map<String, dynamic>> eliminarOrganizacion(String id) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/organizaciones/$id'),
+      headers: _headers,
+    ).timeout(_timeout);
+    final body = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      invalidateCache();
+      return body['datos'] as Map<String, dynamic>? ?? {};
+    }
+    throw Exception(body['mensaje'] ?? 'Error al eliminar la organización');
+  }
+
+  // Asignar usuario a organización (y opcionalmente cambiar su rol)
+  static Future<void> asignarUsuarioOrganizacion(String userId,
+      {String? organizacionId, String? rol}) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/usuarios/$userId/organizacion'),
+      headers: _headers,
+      body: jsonEncode({
+        'organizacion_id': organizacionId,
+        if (rol != null) 'rol': rol,
+      }),
+    ).timeout(_timeout);
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al asignar la organización');
+    }
+  }
+
+  // ── ADMIN: solicitudes de organizaciones ──
+  static Future<List<SolicitudOrganizacion>> getSolicitudesOrganizacion() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/solicitudes'),
+      headers: _headers,
+    ).timeout(_timeout);
+    if (response.statusCode == 200) {
+      final datos = jsonDecode(response.body)['datos'] as List;
+      return datos.map((s) => SolicitudOrganizacion.fromJson(s)).toList();
+    }
+    throw Exception('Error al cargar solicitudes');
+  }
+
+  // Devuelve {solicitud, correo_enviado, correo_motivo} para que el admin
+  // sepa si el correo con la decisión salió o falta configurarlo
+  static Future<Map<String, dynamic>> actualizarSolicitudOrganizacion(
+      String id, String estado) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/solicitudes/$id'),
+      headers: _headers,
+      body: jsonEncode({'estado': estado}),
+    ).timeout(_timeout);
+    final body = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(body['mensaje'] ?? 'Error al actualizar la solicitud');
+    }
+    return body['datos'] as Map<String, dynamic>? ?? {};
+  }
+
+  static Future<void> eliminarSolicitudOrganizacion(String id) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/solicitudes/$id'),
+      headers: _headers,
+    ).timeout(_timeout);
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al eliminar la solicitud');
+    }
+  }
+
+  // ── ORGANIZADOR: mi organización ──
+  static Future<Organizacion> getMiOrganizacion() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/mi-organizacion'),
+      headers: _headers,
+    ).timeout(_timeout);
+    final body = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return Organizacion.fromJson(body['datos']);
+    }
+    throw Exception(body['mensaje'] ?? 'Error al cargar tu organización');
+  }
+
+  static Future<void> actualizarMiOrganizacion(
+      {bool? mostrarMensajesMascota, String? foto}) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/mi-organizacion'),
+      headers: _headers,
+      body: jsonEncode({
+        if (mostrarMensajesMascota != null)
+          'mostrar_mensajes_mascota': mostrarMensajesMascota,
+        if (foto != null) 'foto': foto,
+      }),
+    ).timeout(_timeout);
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al actualizar la configuración');
+    }
+  }
+
+  // ── Racha ─────────────────────────────────────────────────────────────────
+
+  // Reanudar la racha perdida por un solo día (máx. 3 veces al mes).
+  // Devuelve {racha, reanudaciones_restantes}.
+  static Future<Map<String, dynamic>> reanudarRacha() async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/student/racha/reanudar'),
+      headers: _headers,
+    ).timeout(_timeout);
+
+    final body = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return body['datos'] as Map<String, dynamic>;
+    }
+    throw Exception(body['mensaje'] ?? 'No se pudo reanudar la racha');
+  }
+
   // ── ADMIN: Niveles ────────────────────────────────────────────────────────
 
   static Future<void> crearNivel(
@@ -497,6 +750,21 @@ class ApiService {
     if (response.statusCode != 200) {
       final body = jsonDecode(response.body);
       throw Exception(body['mensaje'] ?? 'Error al actualizar nivel');
+    }
+    invalidateCache();
+  }
+
+  // Aplica el orden específico definido por el admin: [{id, orden}]
+  static Future<void> reordenarNiveles(
+      List<Map<String, dynamic>> orden) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/niveles/reordenar'),
+      headers: _headers,
+      body: jsonEncode({'orden': orden}),
+    ).timeout(_timeout);
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al reordenar niveles');
     }
     invalidateCache();
   }

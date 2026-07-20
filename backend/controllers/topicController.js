@@ -8,11 +8,12 @@ const Progreso = require('../models/Progreso');
 const { respuestaExito, respuestaError, respuestaPaginada, paginar } = require('../utils/helpers');
 const constants = require('../config/constants');
 const Log = require('../models/Log');
+const { puedeTocarNivel, puedeTocarTema, nivelesDelAlcance } = require('../utils/orgScope');
 
-// Crear tema (solo admin)
+// Crear tema (admin u organizador sobre niveles de su organización)
 exports.crearTema = async (req, res, next) => {
   try {
-    const { nombre, descripcion, nivel_id, orden } = req.body;
+    const { nombre, descripcion, nivel_id, orden, mascota, mensaje_mascota } = req.body;
 
     // Validar que el nivel existe
     const nivel = await Level.findById(nivel_id);
@@ -24,11 +25,17 @@ exports.crearTema = async (req, res, next) => {
       );
     }
 
+    if (!(await puedeTocarNivel(req, nivel_id))) {
+      return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+    }
+
     const tema = new Topic({
       nombre,
       descripcion,
       nivel_id,
       orden: orden || 0,
+      mascota: mascota ?? null,
+      mensaje_mascota: mensaje_mascota || '',
     });
 
     await tema.save();
@@ -53,7 +60,7 @@ exports.crearTema = async (req, res, next) => {
   }
 };
 
-// Obtener todos los temas
+// Obtener todos los temas (el organizador solo ve los de su organización)
 exports.obtenerTodoLosTemas = async (req, res, next) => {
   try {
     const { pagina = 1, limite = 10, nivel_id, activo } = req.query;
@@ -62,6 +69,17 @@ exports.obtenerTodoLosTemas = async (req, res, next) => {
     const filtro = {};
     if (nivel_id) filtro.nivel_id = nivel_id;
     if (activo !== undefined) filtro.activo = activo === 'true';
+
+    // Organizador: limitar a los niveles de su organización
+    const alcance = await nivelesDelAlcance(req);
+    if (alcance !== null) {
+      filtro.nivel_id = nivel_id
+        ? nivel_id // ya se validará que esté dentro del alcance abajo
+        : { $in: alcance };
+      if (nivel_id && !alcance.some((id) => id.toString() === nivel_id)) {
+        return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+      }
+    }
 
     const temas = await Topic.find(filtro)
       .skip(skip)
@@ -111,15 +129,19 @@ exports.obtenerTemaPorId = async (req, res, next) => {
   }
 };
 
-// Actualizar tema (solo admin)
+// Actualizar tema (admin u organizador dueño)
 exports.actualizarTema = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { nombre, descripcion, orden, activo } = req.body;
+    const { nombre, descripcion, orden, activo, mascota, mensaje_mascota } = req.body;
+
+    if (!(await puedeTocarTema(req, id))) {
+      return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+    }
 
     const tema = await Topic.findByIdAndUpdate(
       id,
-      { nombre, descripcion, orden, activo },
+      { nombre, descripcion, orden, activo, mascota, mensaje_mascota },
       { new: true, runValidators: true }
     ).populate('nivel_id', 'nombre');
 
@@ -150,10 +172,14 @@ exports.actualizarTema = async (req, res, next) => {
   }
 };
 
-// Eliminar tema (solo admin) — borrado en cascada de lecciones y ejercicios
+// Eliminar tema (admin u organizador dueño) — cascada de lecciones/ejercicios
 exports.eliminarTema = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    if (!(await puedeTocarTema(req, id))) {
+      return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+    }
 
     const tema = await Topic.findById(id);
     if (!tema) {

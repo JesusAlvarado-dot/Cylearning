@@ -7,6 +7,7 @@ import '../services/sound_service.dart';
 import '../models/models.dart';
 import '../widgets/celebration_overlay.dart';
 import '../widgets/medalla_dialog.dart';
+import '../widgets/racha_dialog.dart';
 
 const _kBg     = Color(0xFFFFF9F2);
 const _kDark   = Color(0xFF1C1140);
@@ -114,6 +115,7 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
       correct ? SoundService.correct() : SoundService.wrong();
       _feedbackCtrl.forward(from: 0);
       _bounceCtrl.reverse().then((_) => _bounceCtrl.forward());
+      await _manejarRacha(r);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -124,6 +126,22 @@ class _PruebaFinalScreenState extends State<PruebaFinalScreen>
         const SnackBar(
             content: Text('No se pudo enviar tu respuesta. Intenta de nuevo')),
       );
+    }
+  }
+
+  // Racha estilo TikTok: si subió (primer ejercicio del día) y va en 3+,
+  // celebración grande; si se rompió por faltar UN día, ofrecer reanudarla.
+  Future<void> _manejarRacha(Map<String, dynamic> r) async {
+    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+    final rachaAnterior = auth.racha;
+    final rachaNueva = r['racha'] as int? ?? rachaAnterior;
+    auth.actualizarRacha(rachaNueva);
+
+    if ((r['racha_recuperable'] as int? ?? 0) > 0) {
+      await ofrecerReanudarRacha(context, r);
+    } else if (rachaNueva > rachaAnterior && rachaNueva >= 3) {
+      await mostrarCelebracionRacha(context, rachaNueva);
     }
   }
 

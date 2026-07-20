@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import './config/config.dart';
 import './services/api_service.dart';
+import './services/notification_service.dart';
 import './providers/auth_provider.dart';
 import './screens/login_screen.dart';
 import './screens/registro_screen.dart';
@@ -21,6 +22,7 @@ void main() async {
   await dotenv.load(fileName: '.env');
   Config.printConfig();
   ApiService.initialize();
+  await NotificationService.init();
   runApp(const MyApp());
 }
 
@@ -72,6 +74,19 @@ class MyApp extends StatelessWidget {
         ),
         initialRoute: '/',
         onGenerateRoute: (settings) {
+          // Deep link de invitación: cylearn://app/unirse?codigo=XXXXXX
+          // (el engine de Flutter entrega "/unirse?codigo=XXXXXX" como ruta)
+          final uri = Uri.tryParse(settings.name ?? '');
+          if (uri != null &&
+              (uri.path == '/unirse' || uri.path == 'unirse')) {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => RegistroScreen(
+                codigoInvitacion: uri.queryParameters['codigo'],
+              ),
+            );
+          }
+
           switch (settings.name) {
             case '/':
               return MaterialPageRoute(
@@ -97,9 +112,12 @@ class MyApp extends StatelessWidget {
                         ),
                       );
                     }
-                    return auth.isAuthenticated
-                        ? const NivelesScreen()
-                        : const LoginScreen();
+                    if (!auth.isAuthenticated) return const LoginScreen();
+                    final rol = auth.usuario?.rol;
+                    if (rol == 'admin' || rol == 'organizador') {
+                      return const AdminScreen();
+                    }
+                    return const NivelesScreen();
                   },
                 ),
               );

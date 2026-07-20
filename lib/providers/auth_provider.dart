@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
+import '../services/google_auth_service.dart';
 
 class AuthProvider with ChangeNotifier {
   Usuario? _usuario;
@@ -40,6 +42,7 @@ class AuthProvider with ChangeNotifier {
           _racha = _usuario?.racha ?? 0;
           _isAuthenticated = true;
           await loadProgreso();
+          NotificationService.programarRecordatorios(racha: _racha);
         }
       } catch (_) {}
     }
@@ -65,6 +68,39 @@ class AuthProvider with ChangeNotifier {
       _isAuthenticated = true;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('recordar', recordar);
+      NotificationService.programarRecordatorios(racha: _racha);
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      _isAuthenticated = false;
+    } finally {
+      _cargando = false;
+      notifyListeners();
+    }
+  }
+
+  // Login con Google: abre el selector de cuentas, manda el idToken al
+  // backend y entra con la sesión que devuelva (crea la cuenta si no existía).
+  // recordar sigue el mismo comportamiento que el login con contraseña.
+  Future<void> loginConGoogle(
+      {String? codigoOrganizacion, bool recordar = false}) async {
+    _cargando = true;
+    _error = '';
+    try {
+      final idToken = await GoogleAuthService.iniciarSesion();
+      if (idToken == null) {
+        // El usuario cerró el selector de cuentas sin elegir ninguna
+        _cargando = false;
+        notifyListeners();
+        return;
+      }
+      final response = await ApiService.loginGoogle(idToken,
+          codigoOrganizacion: codigoOrganizacion);
+      _usuario = Usuario.fromJson(response['datos']['usuario']);
+      _racha = _usuario?.racha ?? 0;
+      _isAuthenticated = true;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('recordar', recordar);
+      NotificationService.programarRecordatorios(racha: _racha);
     } catch (e) {
       _error = e.toString().replaceFirst('Exception: ', '');
       _isAuthenticated = false;
@@ -81,12 +117,14 @@ class AuthProvider with ChangeNotifier {
     _registroExitoso = false;
   }
 
-  Future<void> registro(String nombre, String email, String contrasena) async {
+  Future<void> registro(String nombre, String email, String contrasena,
+      {String? codigoOrganizacion}) async {
     _cargando = true;
     _error = '';
     _registroExitoso = false;
     try {
-      await ApiService.registro(nombre, email, contrasena);
+      await ApiService.registro(nombre, email, contrasena,
+          codigoOrganizacion: codigoOrganizacion);
       _registroExitoso = true;
     } catch (e) {
       _error = e.toString().replaceFirst('Exception: ', '');
@@ -103,10 +141,14 @@ class AuthProvider with ChangeNotifier {
     } catch (_) {}
   }
 
-  // Actualizar nombre y/o contraseña; lanza excepción si el servidor rechaza
-  Future<void> actualizarPerfil({String? nombre, String? contrasena}) async {
-    _usuario = await ApiService.actualizarPerfil(
-        nombre: nombre, contrasena: contrasena);
+  // Actualizar nombre, contraseña y/o foto; lanza excepción si el servidor
+  // rechaza. foto: '' la quita, null no la toca. Se refresca desde /me para
+  // conservar los datos poblados de la organización (tema por sector).
+  Future<void> actualizarPerfil(
+      {String? nombre, String? contrasena, String? foto}) async {
+    await ApiService.actualizarPerfil(
+        nombre: nombre, contrasena: contrasena, foto: foto);
+    _usuario = await ApiService.getUsuarioActual();
     notifyListeners();
   }
 
@@ -117,6 +159,25 @@ class AuthProvider with ChangeNotifier {
       _racha = _usuario?.racha ?? _racha;
       notifyListeners();
     } catch (_) {}
+  }
+
+  // Actualizar la racha con la respuesta de responder un ejercicio.
+  // Cada actividad reprograma los recordatorios: la notificación de "racha
+  // en riesgo" solo llega si el usuario NO vuelve a entrar mañana.
+  void actualizarRacha(int racha) {
+    if (racha != _racha) {
+      _racha = racha;
+      notifyListeners();
+    }
+    NotificationService.programarRecordatorios(racha: _racha);
+  }
+
+  // Reanudar la racha perdida (máx. 3 por mes). Devuelve las que quedan.
+  Future<int> reanudarRacha() async {
+    final result = await ApiService.reanudarRacha();
+    _racha = result['racha'] as int? ?? _racha;
+    notifyListeners();
+    return result['reanudaciones_restantes'] as int? ?? 0;
   }
 
   Future<Map<String, dynamic>> marcarLeccionCompleta(String leccionId, int porcentaje) async {
@@ -143,6 +204,8 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> logout() async {
     await ApiService.logout();
+    await GoogleAuthService.cerrarSesion();
+    await NotificationService.cancelarTodo();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('recordar');
     _usuario = null;

@@ -7,8 +7,9 @@ const exerciseController = require('../controllers/exerciseController');
 const progressController = require('../controllers/progressController');
 const logController = require('../controllers/logController');
 const userController = require('../controllers/userController');
+const orgController = require('../controllers/orgController');
 const authMiddleware = require('../middlewares/authMiddleware');
-const { requiereAdmin } = require('../middlewares/roleMiddleware');
+const { requiereAdmin, requiereAdminOOrganizador } = require('../middlewares/roleMiddleware');
 const {
   validarEmail,
   validarContrasena,
@@ -19,26 +20,49 @@ const {
   verificarValidacion,
 } = require('../utils/validators');
 
-// Middleware de autenticación y admin para todas las rutas
-router.use(authMiddleware, requiereAdmin);
+// Autenticación para todas las rutas. El acceso por rol se decide por
+// sección: la gestión de usuarios/organizaciones/logs es SOLO del admin
+// (dueños de la app); el contenido educativo también lo administran los
+// organizadores, limitados a su organización dentro de cada controlador.
+router.use(authMiddleware, requiereAdminOOrganizador);
 
-// ============== USUARIOS ==============
-router.get('/usuarios', userController.obtenerEstudiantesAdmin);
+// ============== USUARIOS (solo admin) ==============
+router.get('/usuarios', requiereAdmin, userController.obtenerEstudiantesAdmin);
 router.post(
   '/usuarios',
+  requiereAdmin,
   validarNombre,
   validarEmail,
   validarContrasena,
   verificarValidacion,
   userController.crearUsuarioAdmin
 );
-router.put('/usuarios/:id', userController.actualizarUsuario);
-router.delete('/usuarios/:id', userController.eliminarUsuario);
-router.post('/usuarios/:id/medalla', userController.darMedalla);
+router.put('/usuarios/:id', requiereAdmin, userController.actualizarUsuario);
+router.delete('/usuarios/:id', requiereAdmin, userController.eliminarUsuario);
+router.post('/usuarios/:id/medalla', requiereAdmin, userController.darMedalla);
+router.put('/usuarios/:id/organizacion', requiereAdmin, orgController.asignarUsuarioOrganizacion);
 
-// ============== NIVELES ==============
+// ============== ORGANIZACIONES (solo admin) ==============
+router.get('/organizaciones', requiereAdmin, orgController.obtenerOrganizaciones);
+router.post('/organizaciones', requiereAdmin, orgController.crearOrganizacion);
+router.put('/organizaciones/:id', requiereAdmin, orgController.actualizarOrganizacion);
+router.post('/organizaciones/:id/regenerar-codigo', requiereAdmin, orgController.regenerarCodigo);
+router.delete('/organizaciones/:id', requiereAdmin, orgController.eliminarOrganizacion);
+
+// ============== SOLICITUDES DE ORGANIZACIONES (solo admin) ==============
+router.get('/solicitudes', requiereAdmin, orgController.obtenerSolicitudes);
+router.put('/solicitudes/:id', requiereAdmin, orgController.actualizarSolicitud);
+router.delete('/solicitudes/:id', requiereAdmin, orgController.eliminarSolicitud);
+
+// ============== MI ORGANIZACIÓN (organizador) ==============
+router.get('/mi-organizacion', orgController.obtenerMiOrganizacion);
+router.put('/mi-organizacion', orgController.actualizarMiOrganizacion);
+
+// ============== NIVELES (admin y organizador, con alcance) ==============
 router.post('/niveles', levelController.crearNivel);
 router.get('/niveles', levelController.obtenerTodosLosNiveles);
+// (antes de /niveles/:id para que "reordenar" no se interprete como un id)
+router.put('/niveles/reordenar', levelController.reordenarNiveles);
 router.get('/niveles/:id', levelController.obtenerNivelPorId);
 router.put('/niveles/:id', levelController.actualizarNivel);
 router.delete('/niveles/:id', levelController.eliminarNivel);
@@ -77,16 +101,16 @@ router.put(
 );
 router.delete('/ejercicios/:id', exerciseController.eliminarEjercicio);
 
-// ============== PROGRESO ==============
-router.get('/progreso/nivel/:nivelId', progressController.obtenerProgresoNivel);
-router.get('/estadisticas/estudiante/:estudianteId', progressController.obtenerEstadisticasEstudiante);
-router.get('/ranking/estudiantes', progressController.obtenerRankingEstudiantes);
+// ============== PROGRESO (solo admin) ==============
+router.get('/progreso/nivel/:nivelId', requiereAdmin, progressController.obtenerProgresoNivel);
+router.get('/estadisticas/estudiante/:estudianteId', requiereAdmin, progressController.obtenerEstadisticasEstudiante);
+router.get('/ranking/estudiantes', requiereAdmin, progressController.obtenerRankingEstudiantes);
 
-// ============== LOGS ==============
-router.get('/logs', logController.obtenerTodosLosLogs);
-router.get('/logs/usuario/:usuarioId', logController.obtenerLogsUsuario);
-router.get('/logs/entidad/:entidadTipo/:entidadId', logController.obtenerLogsEntidad);
-router.get('/logs/estadisticas', logController.obtenerEstadisticasLogs);
-router.post('/logs/limpiar', logController.limpiarLogsAntiguos);
+// ============== LOGS (solo admin) ==============
+router.get('/logs', requiereAdmin, logController.obtenerTodosLosLogs);
+router.get('/logs/usuario/:usuarioId', requiereAdmin, logController.obtenerLogsUsuario);
+router.get('/logs/entidad/:entidadTipo/:entidadId', requiereAdmin, logController.obtenerLogsEntidad);
+router.get('/logs/estadisticas', requiereAdmin, logController.obtenerEstadisticasLogs);
+router.post('/logs/limpiar', requiereAdmin, logController.limpiarLogsAntiguos);
 
 module.exports = router;

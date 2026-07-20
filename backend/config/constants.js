@@ -1,7 +1,8 @@
 module.exports = {
   // Roles
   ROLES: {
-    ADMIN: 'admin',
+    ADMIN: 'admin',           // dueños de la app: acceso total
+    ORGANIZER: 'organizador', // gestiona el contenido de SU organización
     STUDENT: 'student',
   },
 

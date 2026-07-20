@@ -8,11 +8,24 @@ const Progreso = require('../models/Progreso');
 const { respuestaExito, respuestaError, respuestaPaginada, paginar } = require('../utils/helpers');
 const constants = require('../config/constants');
 const Log = require('../models/Log');
+const { esAdmin, esOrganizador, orgDelUsuario, puedeTocarNivel } = require('../utils/orgScope');
 
-// Crear nivel (solo admin)
+// Crear nivel (admin u organizador)
 exports.crearNivel = async (req, res, next) => {
   try {
-    const { nombre, descripcion, numero, dificultad, orden } = req.body;
+    const { nombre, descripcion, numero, dificultad, orden, organizacion_id } = req.body;
+
+    // El organizador siempre crea dentro de SU organización; el admin puede
+    // crear niveles públicos (sin organización) o asignarlos a una
+    let orgId = null;
+    if (esOrganizador(req)) {
+      orgId = orgDelUsuario(req);
+      if (!orgId) {
+        return respuestaError(res, 'No perteneces a ninguna organización', 403);
+      }
+    } else if (organizacion_id) {
+      orgId = organizacion_id;
+    }
 
     const nivel = new Level({
       nombre,
@@ -20,6 +33,7 @@ exports.crearNivel = async (req, res, next) => {
       numero,
       dificultad: dificultad || 'principiante',
       orden: orden || 0,
+      organizacion_id: orgId,
     });
 
     await nivel.save();
@@ -44,15 +58,28 @@ exports.crearNivel = async (req, res, next) => {
   }
 };
 
-// Obtener todos los niveles
+// Obtener todos los niveles.
+// El contenido visible depende de quién pregunta:
+//   - estudiante de una organización: SOLO los niveles de esa organización
+//   - estudiante sin organización:    solo los niveles públicos
+//   - organizador:                    los niveles de su organización
+//   - admin:                          todos (con filtro opcional)
 exports.obtenerTodosLosNiveles = async (req, res, next) => {
   try {
-    const { pagina = 1, limite = 10, activo } = req.query;
+    const { pagina = 1, limite = 10, activo, organizacion_id } = req.query;
     const { skip, limit } = paginar(pagina, limite);
 
     const filtro = {};
     if (activo !== undefined) {
       filtro.activo = activo === 'true';
+    }
+
+    if (esAdmin(req)) {
+      if (organizacion_id === 'publicos') filtro.organizacion_id = null;
+      else if (organizacion_id) filtro.organizacion_id = organizacion_id;
+    } else {
+      // Estudiantes y organizadores: su organización o el catálogo público
+      filtro.organizacion_id = orgDelUsuario(req);
     }
 
     const niveles = await Level.find(filtro)
@@ -97,6 +124,47 @@ exports.obtenerTodosLosNiveles = async (req, res, next) => {
   }
 };
 
+// Reordenar niveles (solo admin): recibe [{ id, orden }] y aplica el orden
+// específico definido por el admin (independiente de la dificultad)
+exports.reordenarNiveles = async (req, res, next) => {
+  try {
+    const { orden } = req.body; // [{ id: '...', orden: 1 }, ...]
+
+    if (!Array.isArray(orden) || orden.length === 0) {
+      return respuestaError(res, 'Se requiere un arreglo "orden" con { id, orden }', 400);
+    }
+    for (const item of orden) {
+      if (!item.id || typeof item.orden !== 'number') {
+        return respuestaError(res, 'Cada elemento debe tener id y orden numérico', 400);
+      }
+      if (!(await puedeTocarNivel(req, item.id))) {
+        return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+      }
+    }
+
+    await Level.bulkWrite(
+      orden.map((item) => ({
+        updateOne: {
+          filter: { _id: item.id },
+          update: { $set: { orden: item.orden } },
+        },
+      }))
+    );
+
+    await Log.create({
+      tipo: 'actualizado',
+      usuario_id: req.usuarioId,
+      descripcion: `Niveles reordenados (${orden.length})`,
+      entidad_tipo: 'level',
+    });
+
+    const niveles = await Level.find().sort({ orden: 1, numero: 1 });
+    return respuestaExito(res, niveles, 'Orden de niveles actualizado');
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Obtener nivel por ID
 exports.obtenerNivelPorId = async (req, res, next) => {
   try {
@@ -125,11 +193,15 @@ exports.obtenerNivelPorId = async (req, res, next) => {
   }
 };
 
-// Actualizar nivel (solo admin)
+// Actualizar nivel (admin, u organizador sobre su propio contenido)
 exports.actualizarNivel = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { nombre, descripcion, dificultad, orden, activo } = req.body;
+
+    if (!(await puedeTocarNivel(req, id))) {
+      return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+    }
 
     const nivel = await Level.findByIdAndUpdate(
       id,
@@ -164,10 +236,14 @@ exports.actualizarNivel = async (req, res, next) => {
   }
 };
 
-// Eliminar nivel (solo admin) — borrado en cascada de todo su contenido
+// Eliminar nivel (admin u organizador dueño) — borrado en cascada
 exports.eliminarNivel = async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    if (!(await puedeTocarNivel(req, id))) {
+      return respuestaError(res, constants.ERROR_MESSAGES.FORBIDDEN, 403);
+    }
 
     const nivel = await Level.findById(id);
     if (!nivel) {

@@ -3,11 +3,11 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../models/models.dart';
+import '../theme/sector_theme.dart';
+import '../widgets/avatar.dart';
 
-const _kBg     = Color(0xFFFFF9F2);
 const _kDark   = Color(0xFF1C1140);
 const _kMuted  = Color(0xFF8E8EA9);
-const _kYellow = Color(0xFFFFCC00);
 
 // Solid accent colors — one per level (no gradients)
 const _levelColors = [
@@ -64,8 +64,10 @@ class _NivelesScreenState extends State<NivelesScreen>
 
   @override
   Widget build(BuildContext context) {
+    // El fondo y los acentos cambian según el sector de la organización
+    final tema = SectorTheme.deUsuario(context.watch<AuthProvider>().usuario);
     return Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: tema.fondo,
       body: Consumer<AuthProvider>(
         builder: (context, auth, _) {
           final nombre = (auth.usuario?.nombre.trim().isNotEmpty ?? false)
@@ -222,8 +224,9 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tema = SectorTheme.deUsuario(auth.usuario);
     return Container(
-      color: _kBg,
+      color: tema.fondo,
       child: Stack(
         children: [
           // Background blobs
@@ -232,7 +235,7 @@ class _Header extends StatelessWidget {
             child: Container(
               width: 160, height: 160,
               decoration: BoxDecoration(
-                color: const Color(0xFF6B46F6).withValues(alpha: 0.08),
+                color: tema.primario.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
             ),
@@ -242,7 +245,7 @@ class _Header extends StatelessWidget {
             child: Container(
               width: 100, height: 100,
               decoration: BoxDecoration(
-                color: _kYellow.withValues(alpha: 0.15),
+                color: tema.acento.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
             ),
@@ -253,25 +256,17 @@ class _Header extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
               child: Row(
                 children: [
-                  // Avatar
+                  // Avatar (con foto de perfil si la hay)
                   Container(
-                    width: 56,
-                    height: 56,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEFEBFF),
                       shape: BoxShape.circle,
-                      border: Border.all(
-                          color: const Color(0xFF6B46F6), width: 2.5),
+                      border: Border.all(color: tema.primario, width: 2.5),
                     ),
-                    child: Center(
-                      child: Text(
-                        nombre.isNotEmpty ? nombre[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF6B46F6),
-                        ),
-                      ),
+                    child: Avatar(
+                      foto: auth.usuario?.foto ?? '',
+                      nombre: nombre,
+                      radio: 26,
+                      color: tema.primario,
                     ),
                   ),
                   const SizedBox(width: 14),

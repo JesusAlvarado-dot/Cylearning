@@ -11,8 +11,8 @@ if (!process.env.JWT_SECRET) {
 module.exports = {
   // Database
   mongodb: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/app-escuela',
-    testUri: process.env.MONGODB_TEST_URI || 'mongodb://localhost:27017/app-escuela-test',
+    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/cylearn',
+    testUri: process.env.MONGODB_TEST_URI || 'mongodb://localhost:27017/cylearn_test',
   },
 
   // JWT
@@ -44,7 +44,7 @@ module.exports = {
 
   // App
   app: {
-    name: 'App Escuela',
+    name: 'CyLearn',
     version: '1.0.0',
   },
 };

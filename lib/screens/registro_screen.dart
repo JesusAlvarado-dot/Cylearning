@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
+import '../models/models.dart';
 
 const _kBg     = Color(0xFFFFF9F2);
 const _kPurple = Color(0xFF6B46F6);
@@ -10,7 +12,10 @@ const _kYellow = Color(0xFFFFCC00);
 const _kGreen  = Color(0xFF059669);
 
 class RegistroScreen extends StatefulWidget {
-  const RegistroScreen({super.key});
+  // Código que llega por link de invitación (cylearn://app/unirse?codigo=X):
+  // se aplica automáticamente y no se pide en el formulario
+  final String? codigoInvitacion;
+  const RegistroScreen({super.key, this.codigoInvitacion});
   @override
   State<RegistroScreen> createState() => _RegistroScreenState();
 }
@@ -21,7 +26,16 @@ class _RegistroScreenState extends State<RegistroScreen>
   final _emailCtrl   = TextEditingController();
   final _passCtrl    = TextEditingController();
   final _confirmCtrl = TextEditingController();
+  final _codigoCtrl  = TextEditingController();
   bool _obscure = true;
+
+  // Info de la organización cuando se llega por link de invitación
+  InfoInvitacion? _invitacion;
+  bool _invitacionInvalida = false;
+
+  bool get _vieneDeInvitacion =>
+      widget.codigoInvitacion != null &&
+      widget.codigoInvitacion!.trim().isNotEmpty;
 
   late AnimationController _floatCtrl;
   late Animation<double> _floatAnim;
@@ -37,6 +51,23 @@ class _RegistroScreenState extends State<RegistroScreen>
     )..repeat(reverse: true);
     _floatAnim = Tween<double>(begin: -8.0, end: 8.0).animate(
       CurvedAnimation(parent: _floatCtrl, curve: Curves.easeInOut));
+
+    if (_vieneDeInvitacion) {
+      _codigoCtrl.text = widget.codigoInvitacion!.trim();
+      _cargarInvitacion();
+    }
+  }
+
+  Future<void> _cargarInvitacion() async {
+    try {
+      final info = await ApiService.validarCodigoOrganizacion(
+          widget.codigoInvitacion!.trim());
+      if (!mounted) return;
+      setState(() => _invitacion = info);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _invitacionInvalida = true);
+    }
   }
 
   @override
@@ -46,6 +77,7 @@ class _RegistroScreenState extends State<RegistroScreen>
     _emailCtrl.dispose();
     _passCtrl.dispose();
     _confirmCtrl.dispose();
+    _codigoCtrl.dispose();
     super.dispose();
   }
 
@@ -135,11 +167,18 @@ class _RegistroScreenState extends State<RegistroScreen>
                     ),
                     child: Consumer<AuthProvider>(
                       builder: (_, auth, __) {
-                        // Auto-go-back on success
+                        // Auto-go-back on success. Si se llegó por link de
+                        // invitación no hay pantalla debajo: ir al login en
+                        // vez de hacer pop (que cerraría la app)
                         if (auth.registroExitoso) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted) {
-                              Navigator.of(context).pop();
+                              final nav = Navigator.of(context);
+                              if (nav.canPop()) {
+                                nav.pop();
+                              } else {
+                                nav.pushReplacementNamed('/login');
+                              }
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: const Text(
@@ -170,6 +209,63 @@ class _RegistroScreenState extends State<RegistroScreen>
                             _RegField(ctrl: _confirmCtrl,
                               label: 'Confirmar contraseña', emoji: '✅',
                               obscureText: true),
+                            const SizedBox(height: 12),
+                            if (_vieneDeInvitacion) ...[
+                              // Invitación por link: el código ya viene puesto
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: _invitacionInvalida
+                                      ? const Color(0xFFFEF2F2)
+                                      : const Color(0xFFEFEBFF),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                      color: _invitacionInvalida
+                                          ? const Color(0xFFFCA5A5)
+                                          : _kPurple.withValues(alpha: 0.4)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text(
+                                        _invitacionInvalida
+                                            ? '❌'
+                                            : (_invitacion?.tipo == 'docente'
+                                                ? '🧑‍🏫'
+                                                : '🏫'),
+                                        style:
+                                            const TextStyle(fontSize: 22)),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        _invitacionInvalida
+                                            ? 'Este link de invitación ya no es válido. Pide uno nuevo a tu organización.'
+                                            : _invitacion == null
+                                                ? 'Verificando invitación...'
+                                                : _invitacion!.tipo == 'docente'
+                                                    ? 'Te unirás a "${_invitacion!.nombre}" como PROFESOR 🎓'
+                                                    : 'Te unirás a "${_invitacion!.nombre}" 🎉',
+                                        style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: _kDark,
+                                            height: 1.3),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ] else ...[
+                              _RegField(ctrl: _codigoCtrl,
+                                label: 'Código de organización (opcional)',
+                                emoji: '🏫'),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Si tu escuela u organización te dio un código, '
+                                'escríbelo para unirte a su contenido',
+                                style: TextStyle(fontSize: 11, color: _kMuted),
+                              ),
+                            ],
                             const SizedBox(height: 18),
                             if (auth.error.isNotEmpty) ...[
                               Container(
@@ -209,6 +305,7 @@ class _RegistroScreenState extends State<RegistroScreen>
                                   _nameCtrl.text.trim(),
                                   _emailCtrl.text.trim(),
                                   _passCtrl.text,
+                                  codigoOrganizacion: _codigoCtrl.text,
                                 );
                               },
                             ),

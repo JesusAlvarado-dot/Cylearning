@@ -1,7 +1,7 @@
 {
-  "name": "app-escuela-backend",
+  "name": "cylearn-backend",
   "version": "1.0.0",
-  "description": "Backend API para App Escuela - Plataforma educativa tipo Duolingo",
+  "description": "Backend API para CyLearn - Plataforma educativa de ciberseguridad",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -25,10 +25,12 @@
     "express": "^4.18.2",
     "express-rate-limit": "^8.5.2",
     "express-validator": "^7.0.0",
+    "google-auth-library": "^10.9.0",
     "helmet": "^7.0.0",
     "jsonwebtoken": "^9.0.0",
     "mongoose": "^7.0.0",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "nodemailer": "^9.0.3"
   },
   "devDependencies": {
     "jest": "^29.5.0",

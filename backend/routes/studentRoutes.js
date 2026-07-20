@@ -63,4 +63,8 @@ router.get('/progreso', progressController.obtenerProgresoGeneral);
 // Ranking público de estudiantes (top 20 por puntos)
 router.get('/ranking', progressController.obtenerRankingPublico);
 
+// ============== RACHA ==============
+// Reanudar racha perdida por un solo día (máx. 3 por mes)
+router.post('/racha/reanudar', progressController.reanudarRachaStudent);
+
 module.exports = router;

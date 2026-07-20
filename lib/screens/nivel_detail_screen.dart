@@ -95,18 +95,27 @@ class _NivelDetailScreenState extends State<NivelDetailScreen>
     );
   }
 
+  // Los 5 muñequillos disponibles (el organizador elige uno por tema)
+  static const _moods = ['start', 'progress', 'proud', 'excited', 'challenge'];
+
   List<Widget> _buildPathItems(List<Leccion> lecciones) {
     final auth = context.read<AuthProvider>();
     final items = <Widget>[];
 
+    // La organización puede apagar las burbujas de los personajes
+    final mostrarMascotas =
+        auth.usuario?.organizacion?.mostrarMensajesMascota ?? true;
+
     // Opening character bubble
-    items.add(_CharacterBubble(
-      message:
-          '¡Hola! Bienvenido a "${widget.nivel.nombre}". ¡Prepárate para una aventura épica! 🚀',
-      mood: 'start',
-      fromLeft: true,
-    ));
-    items.add(const _PathConnector(height: 32));
+    if (mostrarMascotas) {
+      items.add(_CharacterBubble(
+        message:
+            '¡Hola! Bienvenido a "${widget.nivel.nombre}". ¡Prepárate para una aventura épica! 🚀',
+        mood: 'start',
+        fromLeft: true,
+      ));
+      items.add(const _PathConnector(height: 32));
+    }
 
     for (int i = 0; i < lecciones.length; i++) {
       final color = _nodeColors[i % _nodeColors.length];
@@ -128,28 +137,41 @@ class _NivelDetailScreenState extends State<NivelDetailScreen>
       ));
 
       if (i < lecciones.length - 1) {
-        items.add(const _PathConnector(height: 32));
-        final temaLabel = lecciones[i].tema.isNotEmpty
-            ? lecciones[i].tema
-            : lecciones[i].titulo;
-        items.add(_CharacterBubble(
-          message: _midMessage(temaLabel, i),
-          mood: ['progress', 'proud', 'excited'][i % 3],
-          fromLeft: (i + 1) % 2 == 0,
-        ));
+        if (mostrarMascotas) {
+          items.add(const _PathConnector(height: 32));
+          final temaLabel = lecciones[i].tema.isNotEmpty
+              ? lecciones[i].tema
+              : lecciones[i].titulo;
+          // Mensaje y muñequillo personalizados del tema (si el organizador
+          // los configuró); si no, la rotación automática de siempre
+          final mensaje = lecciones[i].temaMensaje.isNotEmpty
+              ? lecciones[i].temaMensaje
+              : _midMessage(temaLabel, i);
+          final mascota = lecciones[i].temaMascota;
+          final mood = (mascota != null && mascota >= 0 && mascota < _moods.length)
+              ? _moods[mascota]
+              : ['progress', 'proud', 'excited'][i % 3];
+          items.add(_CharacterBubble(
+            message: mensaje,
+            mood: mood,
+            fromLeft: (i + 1) % 2 == 0,
+          ));
+        }
         items.add(const _PathConnector(height: 32));
       }
     }
 
     // Before final test
     items.add(const _PathConnector(height: 32));
-    items.add(const _CharacterBubble(
-      message:
-          '¡Increíble! Completaste todas las lecciones. ¡Ahora demuestra todo lo que aprendiste... si te atreves! 😤',
-      mood: 'challenge',
-      fromLeft: true,
-    ));
-    items.add(const _PathConnector(height: 32));
+    if (mostrarMascotas) {
+      items.add(const _CharacterBubble(
+        message:
+            '¡Increíble! Completaste todas las lecciones. ¡Ahora demuestra todo lo que aprendiste... si te atreves! 😤',
+        mood: 'challenge',
+        fromLeft: true,
+      ));
+      items.add(const _PathConnector(height: 32));
+    }
 
     // Final test node — locked until ALL lessons are done
     final allDone = lecciones.every((l) => auth.isLeccionCompletada(l.id));

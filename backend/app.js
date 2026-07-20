@@ -66,6 +66,7 @@ const apiLimiter = rateLimit({
 
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/registro', authLimiter);
+app.use('/api/auth/google', authLimiter);
 app.use('/api', apiLimiter);
 
 // ============== RUTAS ==============
