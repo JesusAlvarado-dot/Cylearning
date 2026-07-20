@@ -18,21 +18,21 @@ Future<String?> _elegirLogo() async {
 }
 
 // Abre la hoja de compartir del sistema con el link de invitación.
-// Los links (cylearn://app/unirse?codigo=X) abren el registro con el
-// código ya puesto: estudiantes entran como alumnos y el link docente
-// registra al profesor como organizador de la misma organización.
+// Los links (URL web pública con /#/unirse?codigo=X) abren el registro con
+// el código ya puesto: estudiantes entran como alumnos y el link docente
+// registra al profesor como organizador de la misma organización. Al ser
+// una URL normal, funciona en cualquier navegador/dispositivo, no solo
+// para quien ya tenga la app Android instalada.
 void _compartirInvitacion(Organizacion org, {required bool docente}) {
   final codigo = docente ? org.codigoDocente : org.codigo;
   final link = docente ? org.linkDocentes : org.linkEstudiantes;
   final texto = docente
       ? '🧑‍🏫 Te invito a ser profesor de "${org.nombre}" en CyLearn.\n\n'
-          '1) Instala CyLearn en tu Android\n'
-          '2) Toca este link: $link\n\n'
+          'Abre este link: $link\n\n'
           'O regístrate con el código docente: $codigo'
       : '🛡️ ¡Únete a "${org.nombre}" en CyLearn y aprende ciberseguridad '
           'jugando!\n\n'
-          '1) Instala CyLearn en tu Android\n'
-          '2) Toca este link: $link\n\n'
+          'Abre este link: $link\n\n'
           'O regístrate con el código: $codigo';
   SharePlus.instance.share(ShareParams(text: texto));
 }

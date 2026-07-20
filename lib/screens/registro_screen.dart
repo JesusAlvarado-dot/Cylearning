@@ -12,7 +12,7 @@ const _kYellow = Color(0xFFFFCC00);
 const _kGreen  = Color(0xFF059669);
 
 class RegistroScreen extends StatefulWidget {
-  // Código que llega por link de invitación (cylearn://app/unirse?codigo=X):
+  // Código que llega por link de invitación (.../#/unirse?codigo=X):
   // se aplica automáticamente y no se pide en el formulario
   final String? codigoInvitacion;
   const RegistroScreen({super.key, this.codigoInvitacion});

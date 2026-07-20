@@ -74,8 +74,11 @@ class MyApp extends StatelessWidget {
         ),
         initialRoute: '/',
         onGenerateRoute: (settings) {
-          // Deep link de invitación: cylearn://app/unirse?codigo=XXXXXX
-          // (el engine de Flutter entrega "/unirse?codigo=XXXXXX" como ruta)
+          // Link de invitación de organización: .../#/unirse?codigo=XXXXXX
+          // (Web) o cylearn://app/unirse?codigo=XXXXXX (deep link Android
+          // nativo, si se abre desde una app que ya tenga el esquema
+          // registrado) — el engine de Flutter entrega "/unirse?codigo=..."
+          // como ruta en ambos casos.
           final uri = Uri.tryParse(settings.name ?? '');
           if (uri != null &&
               (uri.path == '/unirse' || uri.path == 'unirse')) {

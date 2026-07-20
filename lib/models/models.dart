@@ -1,3 +1,5 @@
+import '../config/config.dart';
+
 class ProgresoResumen {
   final Set<String> leccionesCompletadas;
   final Set<String> nivelesCompletados;
@@ -288,9 +290,11 @@ class Organizacion {
         totalNiveles: json['total_niveles'] as int? ?? 0,
       );
 
-  // Links de invitación (deep links que abren el registro con el código ya puesto)
-  String get linkEstudiantes => 'cylearn://app/unirse?codigo=$codigo';
-  String get linkDocentes => 'cylearn://app/unirse?codigo=$codigoDocente';
+  // Links de invitación: URL web pública (funciona en cualquier navegador,
+  // no solo si el destinatario ya tiene la app Android instalada) que abre
+  // el registro con el código ya puesto.
+  String get linkEstudiantes => '${Config.appUrl}/#/unirse?codigo=$codigo';
+  String get linkDocentes => '${Config.appUrl}/#/unirse?codigo=$codigoDocente';
 }
 
 // Resultado de validar un código de invitación (banner del registro)

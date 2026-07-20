@@ -41,6 +41,14 @@ class Config {
     return int.parse(dotenv.env['API_TIMEOUT'] ?? '30');
   }
 
+  // URL pública de la web desplegada, usada para armar links que cualquiera
+  // pueda abrir (invitaciones de organización), a diferencia de apiUrl que
+  // puede apuntar a localhost/10.0.2.2 en desarrollo.
+  static String get appUrl {
+    final url = dotenv.env['APP_URL'] ?? 'https://cylearn-web.onrender.com';
+    return url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+  }
+
   // Client ID del cliente OAuth "Web" de Google Cloud Console. Se usa tanto
   // para iniciar sesión en Web como de serverClientId en Android, para que
   // el backend verifique el idToken con un único audience.
