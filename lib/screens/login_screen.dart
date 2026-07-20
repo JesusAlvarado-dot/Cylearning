@@ -13,7 +13,11 @@ const _kYellow  = Color(0xFFFFCC00);
 const _kGreen   = Color(0xFF059669);
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  // Mensaje informativo mostrado cuando se llega aquí porque se intentó
+  // abrir una pantalla que requiere sesión (p. ej. un link directo a
+  // /ranking sin haber iniciado sesión antes).
+  final String? mensajeAcceso;
+  const LoginScreen({super.key, this.mensajeAcceso});
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -171,6 +175,10 @@ class _LoginScreenState extends State<LoginScreen>
                               fontSize: 12, color: _kMuted)),
                           ]),
                         ]),
+                        if (widget.mensajeAcceso != null) ...[
+                          const SizedBox(height: 16),
+                          _InfoBanner(widget.mensajeAcceso!),
+                        ],
                         const SizedBox(height: 22),
                         _GameField(
                           ctrl: _emailCtrl,
@@ -565,6 +573,26 @@ class _GoogleLogoG extends StatelessWidget {
       Text('G', style: TextStyle(
         fontSize: 20, fontWeight: FontWeight.w900,
         color: Color(0xFF4285F4), height: 1)),
+    ]),
+  );
+}
+
+class _InfoBanner extends StatelessWidget {
+  final String message;
+  const _InfoBanner(this.message);
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: const Color(0xFFEFF6FF),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFF93C5FD), width: 1),
+    ),
+    child: Row(children: [
+      const Text('🔒', style: TextStyle(fontSize: 18)),
+      const SizedBox(width: 8),
+      Expanded(child: Text(message, style: const TextStyle(
+        color: Color(0xFF1D4ED8), fontSize: 13, fontWeight: FontWeight.w600))),
     ]),
   );
 }

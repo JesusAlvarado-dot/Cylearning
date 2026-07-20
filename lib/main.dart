@@ -92,26 +92,7 @@ class MyApp extends StatelessWidget {
               return MaterialPageRoute(
                 builder: (_) => Consumer<AuthProvider>(
                   builder: (context, auth, _) {
-                    if (auth.cargando) {
-                      return const Scaffold(
-                        backgroundColor: Color(0xFF6C63FF),
-                        body: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text('🛡️', style: TextStyle(fontSize: 80)),
-                              SizedBox(height: 24),
-                              CircularProgressIndicator(color: Colors.white),
-                              SizedBox(height: 16),
-                              Text(
-                                'Cargando...',
-                                style: TextStyle(color: Colors.white, fontSize: 16),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
+                    if (auth.cargando) return const _CargandoApp();
                     if (!auth.isAuthenticated) return const LoginScreen();
                     final rol = auth.usuario?.rol;
                     if (rol == 'admin' || rol == 'organizador') {
@@ -125,41 +106,71 @@ class MyApp extends StatelessWidget {
               return MaterialPageRoute(settings: settings, builder: (_) => const LoginScreen());
             case '/registro':
               return MaterialPageRoute(settings: settings, builder: (_) => const RegistroScreen());
+            // Las siguientes rutas requieren sesión iniciada: si alguien abre
+            // el link directo (compartido, guardado, etc.) sin haber iniciado
+            // sesión antes, _RutaProtegida muestra el login con un aviso en
+            // vez de intentar cargar la pantalla sin datos de usuario.
             case '/niveles':
-              return MaterialPageRoute(settings: settings, builder: (_) => const NivelesScreen());
-            case '/nivel':
-              final nivel = settings.arguments as Nivel;
               return MaterialPageRoute(
                 settings: settings,
-                builder: (_) => NivelDetailScreen(nivel: nivel),
+                builder: (_) => _RutaProtegida(builder: (_) => const NivelesScreen()),
+              );
+            case '/nivel':
+              final nivel = settings.arguments as Nivel?;
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) => _RutaProtegida(
+                  builder: (_) => nivel != null
+                      ? NivelDetailScreen(nivel: nivel)
+                      : const NivelesScreen(),
+                ),
               );
             case '/leccion':
-              final leccion = settings.arguments as Leccion;
+              final leccion = settings.arguments as Leccion?;
               return MaterialPageRoute(
                 settings: settings,
-                builder: (_) => LeccionScreen(leccion: leccion),
+                builder: (_) => _RutaProtegida(
+                  builder: (_) => leccion != null
+                      ? LeccionScreen(leccion: leccion)
+                      : const NivelesScreen(),
+                ),
               );
             case '/ejercicios':
               final leccionId = settings.arguments as String?;
               return MaterialPageRoute(
                 settings: settings,
-                builder: (_) => EjerciciosScreen(leccionId: leccionId),
+                builder: (_) => _RutaProtegida(
+                  builder: (_) => EjerciciosScreen(leccionId: leccionId),
+                ),
               );
             case '/prueba-final':
-              final args = settings.arguments as Map<String, dynamic>;
+              final args = settings.arguments as Map<String, dynamic>?;
               return MaterialPageRoute(
                 settings: settings,
-                builder: (_) => PruebaFinalScreen(
-                  nivel: args['nivel'] as Nivel,
-                  lecciones: args['lecciones'] as List<Leccion>,
+                builder: (_) => _RutaProtegida(
+                  builder: (_) => args != null
+                      ? PruebaFinalScreen(
+                          nivel: args['nivel'] as Nivel,
+                          lecciones: args['lecciones'] as List<Leccion>,
+                        )
+                      : const NivelesScreen(),
                 ),
               );
             case '/perfil':
-              return MaterialPageRoute(settings: settings, builder: (_) => const PerfilScreen());
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) => _RutaProtegida(builder: (_) => const PerfilScreen()),
+              );
             case '/admin':
-              return MaterialPageRoute(settings: settings, builder: (_) => const AdminScreen());
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) => _RutaProtegida(builder: (_) => const AdminScreen()),
+              );
             case '/ranking':
-              return MaterialPageRoute(settings: settings, builder: (_) => const RankingScreen());
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) => _RutaProtegida(builder: (_) => const RankingScreen()),
+              );
             default:
               return MaterialPageRoute(
                 builder: (_) => const Scaffold(
@@ -171,4 +182,48 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
+}
+
+// Envuelve una pantalla que requiere sesión iniciada. Se usa en rutas que
+// alguien podría abrir directo por URL (compartida, favorito, recargada)
+// sin pasar antes por el login.
+class _RutaProtegida extends StatelessWidget {
+  final WidgetBuilder builder;
+  const _RutaProtegida({required this.builder});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        if (auth.cargando) return const _CargandoApp();
+        if (!auth.isAuthenticated) {
+          return const LoginScreen(
+            mensajeAcceso: 'Primero debes iniciar sesión para continuar',
+          );
+        }
+        return builder(context);
+      },
+    );
+  }
+}
+
+class _CargandoApp extends StatelessWidget {
+  const _CargandoApp();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+    backgroundColor: Color(0xFF6C63FF),
+    body: Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('🛡️', style: TextStyle(fontSize: 80)),
+          SizedBox(height: 24),
+          CircularProgressIndicator(color: Colors.white),
+          SizedBox(height: 16),
+          Text('Cargando...', style: TextStyle(color: Colors.white, fontSize: 16)),
+        ],
+      ),
+    ),
+  );
 }
