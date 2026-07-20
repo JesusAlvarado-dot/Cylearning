@@ -3,7 +3,7 @@ const { respuestaExito, respuestaError, obtenerIP } = require('../utils/helpers'
 const jwtUtils = require('../utils/jwt');
 const constants = require('../config/constants');
 const Log = require('../models/Log');
-const { verificarIdTokenGoogle } = require('../utils/googleAuth');
+const { obtenerPerfilGoogle } = require('../utils/googleAuth');
 
 // Busca la organización por código (estudiante o docente) y devuelve
 // {organizacionId, rol} listos para asignar a un usuario nuevo.
@@ -170,21 +170,20 @@ exports.login = async (req, res, next) => {
   }
 };
 
-// Inicio de sesión / registro con Google. Recibe el idToken que el cliente
-// (Android/Web) obtiene de google_sign_in y lo verifica contra el client ID
-// "Web" (audience única sin importar la plataforma de origen). Si el email
-// ya existe como cuenta local, la vincula (queda disponible con ambos
-// métodos); si no existe, crea la cuenta.
+// Inicio de sesión / registro con Google. Recibe el access token que el
+// cliente (Android/Web) obtiene de google_sign_in y lo valida contra el
+// endpoint de userinfo de Google. Si el email ya existe como cuenta local,
+// la vincula (queda disponible con ambos métodos); si no existe, la crea.
 exports.loginGoogle = async (req, res, next) => {
   try {
-    const { idToken, codigo_organizacion } = req.body;
-    if (!idToken || typeof idToken !== 'string') {
-      return respuestaError(res, 'idToken es requerido', 400);
+    const { accessToken, codigo_organizacion } = req.body;
+    if (!accessToken || typeof accessToken !== 'string') {
+      return respuestaError(res, 'accessToken es requerido', 400);
     }
 
     let payload;
     try {
-      payload = await verificarIdTokenGoogle(idToken);
+      payload = await obtenerPerfilGoogle(accessToken);
     } catch (e) {
       return respuestaError(res, 'Token de Google inválido o expirado', 401);
     }

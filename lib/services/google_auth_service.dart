@@ -12,17 +12,19 @@ class GoogleAuthService {
   static GoogleSignIn get _signIn {
     return _instancia ??= GoogleSignIn(
       scopes: const ['email', 'profile'],
-      // Web: el client ID Web va directo. Android: se detecta solo por el
-      // package+SHA-1 registrados en Cloud Console; se pide serverClientId
-      // (el mismo client ID Web) para que el idToken tenga un audience que
-      // el backend puede verificar sin importar la plataforma de origen.
+      // Solo Web necesita el client ID para inicializar su SDK de JS;
+      // Android lo detecta solo por el package+SHA-1 registrados en Cloud Console.
       clientId: kIsWeb ? Config.googleClientIdWeb : null,
-      serverClientId: kIsWeb ? null : Config.googleClientIdWeb,
     );
   }
 
-  // Abre el selector de cuentas de Google y devuelve el idToken para
+  // Abre el selector de cuentas de Google y devuelve el access token para
   // mandarlo al backend (POST /api/auth/google). null = el usuario canceló.
+  // Se usa access token (no idToken): desde que Google migró a Identity
+  // Services, el signIn() imperativo en Web ya no entrega idToken —
+  // solo lo hace el botón oficial renderizado por Google, que no usamos
+  // porque tenemos un botón propio. El access token sí es confiable en
+  // ambas plataformas.
   static Future<String?> iniciarSesion() async {
     if (!soportado) {
       throw Exception(
@@ -31,10 +33,10 @@ class GoogleAuthService {
     final cuenta = await _signIn.signIn();
     if (cuenta == null) return null;
     final auth = await cuenta.authentication;
-    if (auth.idToken == null) {
+    if (auth.accessToken == null) {
       throw Exception('Google no devolvió un token válido. Intenta de nuevo.');
     }
-    return auth.idToken;
+    return auth.accessToken;
   }
 
   static Future<void> cerrarSesion() async {

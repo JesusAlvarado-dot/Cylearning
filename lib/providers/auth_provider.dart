@@ -78,7 +78,7 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  // Login con Google: abre el selector de cuentas, manda el idToken al
+  // Login con Google: abre el selector de cuentas, manda el access token al
   // backend y entra con la sesión que devuelva (crea la cuenta si no existía).
   // recordar sigue el mismo comportamiento que el login con contraseña.
   Future<void> loginConGoogle(
@@ -86,14 +86,14 @@ class AuthProvider with ChangeNotifier {
     _cargando = true;
     _error = '';
     try {
-      final idToken = await GoogleAuthService.iniciarSesion();
-      if (idToken == null) {
+      final accessToken = await GoogleAuthService.iniciarSesion();
+      if (accessToken == null) {
         // El usuario cerró el selector de cuentas sin elegir ninguna
         _cargando = false;
         notifyListeners();
         return;
       }
-      final response = await ApiService.loginGoogle(idToken,
+      final response = await ApiService.loginGoogle(accessToken,
           codigoOrganizacion: codigoOrganizacion);
       _usuario = Usuario.fromJson(response['datos']['usuario']);
       _racha = _usuario?.racha ?? 0;

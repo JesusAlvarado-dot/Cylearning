@@ -1,19 +1,22 @@
-const { OAuth2Client } = require('google-auth-library');
-
-// Se usa el client ID del cliente OAuth tipo "Web" como audience, sin
-// importar si el login vino de Android, Web o (a futuro) escritorio —
-// en Android la app pide el idToken con serverClientId=este mismo valor,
-// así el backend solo necesita confiar en UN audience.
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID_WEB);
-
-// Verifica un idToken de Google y devuelve su payload (email, name, picture,
-// sub). Lanza si el token es inválido, expiró o el audience no coincide.
-async function verificarIdTokenGoogle(idToken) {
-  const ticket = await client.verifyIdToken({
-    idToken,
-    audience: process.env.GOOGLE_CLIENT_ID_WEB,
+// Verifica un access token de Google llamando al endpoint de userinfo y
+// devuelve el perfil (sub, email, name, picture). Se usa access token en
+// vez de idToken porque, desde que Google migró a Identity Services (2023),
+// el flujo imperativo de signIn() en Web solo entrega access token — el
+// idToken únicamente lo emite el botón oficial de Google renderizado por
+// ellos, que no usamos porque tenemos un botón propio. El access token sí
+// es confiable en Android y Web por igual.
+async function obtenerPerfilGoogle(accessToken) {
+  const respuesta = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
-  return ticket.getPayload();
+  if (!respuesta.ok) {
+    throw new Error('Token de acceso de Google inválido o expirado');
+  }
+  const perfil = await respuesta.json();
+  if (perfil.email_verified !== true) {
+    throw new Error('El email de la cuenta de Google no está verificado');
+  }
+  return perfil;
 }
 
-module.exports = { verificarIdTokenGoogle };
+module.exports = { obtenerPerfilGoogle };

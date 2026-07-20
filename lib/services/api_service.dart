@@ -63,14 +63,14 @@ class ApiService {
     }
   }
 
-  // Login/registro con Google: manda el idToken obtenido de GoogleAuthService.
-  static Future<Map<String, dynamic>> loginGoogle(String idToken,
+  // Login/registro con Google: manda el access token obtenido de GoogleAuthService.
+  static Future<Map<String, dynamic>> loginGoogle(String accessToken,
       {String? codigoOrganizacion}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/google'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'idToken': idToken,
+        'accessToken': accessToken,
         if (codigoOrganizacion != null && codigoOrganizacion.trim().isNotEmpty)
           'codigo_organizacion': codigoOrganizacion.trim(),
       }),
