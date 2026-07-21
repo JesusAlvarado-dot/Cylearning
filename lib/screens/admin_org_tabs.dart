@@ -894,3 +894,274 @@ class _MiOrganizacionTabState extends State<_MiOrganizacionTab> {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB (admin): REPORTES
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ReportesTab extends StatefulWidget {
+  const _ReportesTab();
+  @override
+  State<_ReportesTab> createState() => _ReportesTabState();
+}
+
+class _ReportesTabState extends State<_ReportesTab> {
+  List<Reporte> _reportes = [];
+  bool _loading = true;
+  String? _error;
+  // 'pendiente' (default) o null para ver todos
+  String? _filtro = 'pendiente';
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  void _snack(String msg, {Color color = _green}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: color),
+    );
+  }
+
+  Future<void> _cargar() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final reportes = await ApiService.getReportesAdmin(estado: _filtro);
+      if (!mounted) return;
+      setState(() {
+        _reportes = reportes;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = _extractMsg(e);
+        _loading = false;
+      });
+    }
+  }
+
+  void _cambiarFiltro(String? filtro) {
+    if (filtro == _filtro) return;
+    setState(() => _filtro = filtro);
+    _cargar();
+  }
+
+  Future<void> _revisar(Reporte r) async {
+    final respuestaCtrl = TextEditingController();
+    final decision = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          r.tipo == 'usuario_foto' ? '👤 Foto de perfil reportada' : '📝 Ejercicio reportado',
+          style: const TextStyle(fontWeight: FontWeight.w900, color: _dark, fontSize: 16),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (r.tipo == 'usuario_foto') ...[
+                Row(children: [
+                  Avatar(
+                    foto: (r.entidad?['foto'] ?? '').toString(),
+                    nombre: (r.entidad?['nombre'] ?? '?').toString(),
+                    radio: 22,
+                    color: _purple,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text((r.entidad?['nombre'] ?? 'Usuario eliminado').toString(),
+                            style: const TextStyle(fontWeight: FontWeight.w800, color: _dark)),
+                        Text((r.entidad?['email'] ?? '').toString(),
+                            style: const TextStyle(fontSize: 11, color: _muted)),
+                      ],
+                    ),
+                  ),
+                ]),
+              ] else ...[
+                Text((r.entidad?['pregunta'] ?? 'Ejercicio eliminado').toString(),
+                    style: const TextStyle(fontWeight: FontWeight.w800, color: _dark)),
+              ],
+              const SizedBox(height: 12),
+              Text('Reportado por: ${r.reportadoPorNombre}',
+                  style: const TextStyle(fontSize: 12, color: _muted, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              Text('💬 ${r.motivo}',
+                  style: const TextStyle(fontSize: 13, color: _dark, height: 1.4)),
+              if (r.estado == 'pendiente') ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'Mensaje para quien reportó (opcional, si lo dejas vacío se usa uno por defecto):',
+                  style: TextStyle(fontSize: 11, color: _muted, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: respuestaCtrl,
+                  maxLines: 3,
+                  style: const TextStyle(fontSize: 13, color: _dark),
+                  decoration: InputDecoration(
+                    hintText: 'Recibimos tu reporte, consideramos que...',
+                    hintStyle: const TextStyle(fontSize: 12, color: _muted),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.all(10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  r.tipo == 'usuario_foto'
+                      ? 'Si marcas Fundado, se borra la foto de perfil de este usuario.'
+                      : 'Si marcas Fundado, el ejercicio se desactiva.',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
+                ),
+              ] else ...[
+                const SizedBox(height: 12),
+                Text('Respuesta enviada: ${r.respuestaAdmin}',
+                    style: const TextStyle(fontSize: 12, color: _muted, fontStyle: FontStyle.italic)),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cerrar', style: TextStyle(color: _muted))),
+          if (r.estado == 'pendiente') ...[
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: _muted),
+              onPressed: () => Navigator.pop(ctx, 'infundado|${respuestaCtrl.text}'),
+              child: const Text('Infundado ✕'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: _green),
+              onPressed: () => Navigator.pop(ctx, 'fundado|${respuestaCtrl.text}'),
+              child: const Text('Fundado ✓'),
+            ),
+          ],
+        ],
+      ),
+    );
+    if (decision == null) return;
+    final partes = decision.split('|');
+    final estado = partes.first;
+    final respuesta = partes.length > 1 ? partes.sublist(1).join('|') : '';
+    try {
+      await ApiService.resolverReporte(r.id, estado: estado, respuestaAdmin: respuesta);
+      _snack(estado == 'fundado'
+          ? '✅ Marcado como fundado — se notificó a quien reportó'
+          : 'Marcado como no fundado — se notificó a quien reportó');
+      _cargar();
+    } catch (e) {
+      _snack(_extractMsg(e), color: _red);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(children: [
+            _chipFiltro('Pendientes', 'pendiente'),
+            const SizedBox(width: 8),
+            _chipFiltro('Todos', null),
+          ]),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(color: _purple))
+              : _error != null
+                  ? _ErrorView(onRetry: _cargar, msg: _error)
+                  : _reportes.isEmpty
+                      ? const _EmptyView(emoji: '✅', msg: 'No hay reportes por revisar')
+                      : RefreshIndicator(
+                          color: _purple,
+                          onRefresh: _cargar,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                            itemCount: _reportes.length,
+                            itemBuilder: (_, i) => _tarjetaReporte(_reportes[i]),
+                          ),
+                        ),
+        ),
+      ],
+    );
+  }
+
+  Widget _chipFiltro(String label, String? valor) {
+    final activo = _filtro == valor;
+    return GestureDetector(
+      onTap: () => _cambiarFiltro(valor),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: activo ? _purple : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: activo ? _purple : const Color(0xFFE5E7EB)),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: activo ? Colors.white : _muted)),
+      ),
+    );
+  }
+
+  Widget _tarjetaReporte(Reporte r) {
+    final pendiente = r.estado == 'pendiente';
+    final fundado = r.estado == 'fundado';
+    final color = pendiente
+        ? _yellow
+        : (fundado ? _green : _muted);
+    final titulo = r.tipo == 'usuario_foto'
+        ? (r.entidad?['nombre'] ?? 'Usuario eliminado').toString()
+        : (r.entidad?['pregunta'] ?? 'Ejercicio eliminado').toString();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        leading: Text(r.tipo == 'usuario_foto' ? '👤' : '📝',
+            style: const TextStyle(fontSize: 24)),
+        title: Text(titulo,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: _dark)),
+        subtitle: Text(
+          'Por ${r.reportadoPorNombre} · ${r.fecha.day}/${r.fecha.month}/${r.fecha.year}\n💬 ${r.motivo}',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 11, color: _muted),
+        ),
+        isThreeLine: true,
+        trailing: pendiente
+            ? const Icon(Icons.chevron_right_rounded, color: _muted)
+            : Icon(fundado ? Icons.check_circle : Icons.remove_circle_outline,
+                color: fundado ? _green : _muted, size: 20),
+        onTap: () => _revisar(r),
+      ),
+    );
+  }
+}

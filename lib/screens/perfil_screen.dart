@@ -1,8 +1,10 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import '../config/plataforma_stub.dart' if (dart.library.io) '../config/plataforma_io.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/avatar.dart';
 
@@ -58,11 +60,14 @@ class _PerfilScreenState extends State<PerfilScreen>
               title: const Text('Elegir de la galería'),
               onTap: () => Navigator.pop(ctx, 'galeria'),
             ),
-            ListTile(
-              leading: const Text('📷', style: TextStyle(fontSize: 22)),
-              title: const Text('Tomar una foto'),
-              onTap: () => Navigator.pop(ctx, 'camara'),
-            ),
+            // La cámara solo tiene implementación nativa en Android; en
+            // Windows/Web el plugin no la soporta y el botón no haría nada.
+            if (!kIsWeb && esAndroidNativo)
+              ListTile(
+                leading: const Text('📷', style: TextStyle(fontSize: 22)),
+                title: const Text('Tomar una foto'),
+                onTap: () => Navigator.pop(ctx, 'camara'),
+              ),
             if (tieneFoto)
               ListTile(
                 leading: const Text('🗑️', style: TextStyle(fontSize: 22)),

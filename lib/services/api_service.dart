@@ -667,6 +667,77 @@ class ApiService {
     }
   }
 
+  // ── REPORTES ──
+  // Reportar una foto de perfil (tipo='usuario_foto', entidadId=id del
+  // usuario) o un ejercicio (tipo='ejercicio', entidadId=id del ejercicio)
+  static Future<void> crearReporte({
+    required String tipo,
+    required String entidadId,
+    required String motivo,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/student/reportes'),
+      headers: _headers,
+      body: jsonEncode({
+        'tipo': tipo,
+        'entidad_id': entidadId,
+        'motivo': motivo,
+      }),
+    ).timeout(_timeout);
+    if (response.statusCode != 201) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al enviar el reporte');
+    }
+  }
+
+  // Reportes que envié yo, con la respuesta del admin si ya se resolvieron
+  static Future<List<Reporte>> getMisReportes() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/student/reportes'),
+      headers: _headers,
+    ).timeout(_timeout);
+    if (response.statusCode == 200) {
+      final datos = jsonDecode(response.body)['datos'] as List;
+      return datos.map((r) => Reporte.fromJson(r)).toList();
+    }
+    throw Exception('Error al cargar tus reportes');
+  }
+
+  // Todos los reportes (admin), opcionalmente filtrados por estado
+  static Future<List<Reporte>> getReportesAdmin({String? estado}) async {
+    final uri = Uri.parse('$baseUrl/admin/reportes').replace(
+      queryParameters: estado != null ? {'estado': estado} : null,
+    );
+    final response = await http.get(uri, headers: _headers).timeout(_timeout);
+    if (response.statusCode == 200) {
+      final datos = jsonDecode(response.body)['datos'] as List;
+      return datos.map((r) => Reporte.fromJson(r)).toList();
+    }
+    throw Exception('Error al cargar los reportes');
+  }
+
+  // Resolver un reporte: estado 'fundado' aplica la consecuencia (borra la
+  // foto o desactiva el ejercicio) y da la medalla Justiciero a quien reportó
+  static Future<void> resolverReporte(
+    String id, {
+    required String estado,
+    String? respuestaAdmin,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/reportes/$id'),
+      headers: _headers,
+      body: jsonEncode({
+        'estado': estado,
+        if (respuestaAdmin != null && respuestaAdmin.trim().isNotEmpty)
+          'respuesta_admin': respuestaAdmin.trim(),
+      }),
+    ).timeout(_timeout);
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['mensaje'] ?? 'Error al resolver el reporte');
+    }
+  }
+
   // ── ORGANIZADOR: mi organización ──
   static Future<Organizacion> getMiOrganizacion() async {
     final response = await http.get(

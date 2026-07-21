@@ -47,7 +47,7 @@ class _AdminScreenState extends State<AdminScreen>
     if (_tabController == null || esAdmin != _esAdmin) {
       _esAdmin = esAdmin;
       _tabController?.dispose();
-      _tabController = TabController(length: esAdmin ? 4 : 2, vsync: this);
+      _tabController = TabController(length: esAdmin ? 5 : 2, vsync: this);
     }
   }
 
@@ -132,6 +132,7 @@ class _AdminScreenState extends State<AdminScreen>
                             Tab(text: '📚 Contenido'),
                             Tab(text: '🏫 Organizaciones'),
                             Tab(text: '📩 Solicitudes'),
+                            Tab(text: '🚩 Reportes'),
                           ]
                         : const [
                             Tab(text: '📚 Contenido'),
@@ -151,6 +152,7 @@ class _AdminScreenState extends State<AdminScreen>
                       _ContenidoTab(),
                       _OrganizacionesTab(),
                       _SolicitudesTab(),
+                      _ReportesTab(),
                     ]
                   : const [
                       _ContenidoTab(),

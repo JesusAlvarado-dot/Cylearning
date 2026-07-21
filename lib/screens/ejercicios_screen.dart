@@ -8,6 +8,7 @@ import '../models/models.dart';
 import '../widgets/celebration_overlay.dart';
 import '../widgets/medalla_dialog.dart';
 import '../widgets/racha_dialog.dart';
+import '../widgets/reportar_dialog.dart';
 
 const _kBg     = Color(0xFFFFF9F2);
 const _kDark   = Color(0xFF1C1140);
@@ -248,6 +249,12 @@ class _EjerciciosScreenState extends State<EjerciciosScreen>
                   score: _score,
                   accentColor: _accentColor,
                   onBack: () => Navigator.of(context).pop(),
+                  onReport: () => mostrarReportarDialog(
+                    context,
+                    tipo: 'ejercicio',
+                    entidadId: ejercicios[_currentIndex].id,
+                    tituloEntidad: ejercicios[_currentIndex].pregunta,
+                  ),
                 ),
                 Expanded(
                   child: SingleChildScrollView(
@@ -358,6 +365,7 @@ class _TopBar extends StatelessWidget {
   final int score;
   final Color accentColor;
   final VoidCallback onBack;
+  final VoidCallback onReport;
 
   const _TopBar({
     required this.current,
@@ -365,6 +373,7 @@ class _TopBar extends StatelessWidget {
     required this.score,
     required this.accentColor,
     required this.onBack,
+    required this.onReport,
   });
 
   @override
@@ -405,6 +414,13 @@ class _TopBar extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                     color: _kDark,
                   ),
+                ),
+              ),
+              GestureDetector(
+                onTap: onReport,
+                child: const Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: Icon(Icons.flag_outlined, size: 20, color: _kMuted),
                 ),
               ),
               Container(

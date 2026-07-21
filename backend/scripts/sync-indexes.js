@@ -10,10 +10,11 @@ const Level = require('../models/Level');
 const Organization = require('../models/Organization');
 const OrgRequest = require('../models/OrgRequest');
 const User = require('../models/User');
+const Report = require('../models/Report');
 
 (async () => {
   await mongoose.connect(process.env.MONGODB_URI);
-  for (const model of [Level, Organization, OrgRequest, User]) {
+  for (const model of [Level, Organization, OrgRequest, User, Report]) {
     const antes = await model.collection.indexes().catch(() => []);
     await model.syncIndexes();
     const despues = await model.collection.indexes();

@@ -39,6 +39,7 @@ class Medalla {
       case 'plata': return '🥈';
       case 'bronce': return '🥉';
       case 'estrella': return '⭐';
+      case 'justiciero': return '🦸';
       default: return '🏅';
     }
   }
@@ -345,6 +346,50 @@ class SolicitudOrganizacion {
         estado: json['estado'] ?? 'pendiente',
         fecha: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
       );
+}
+
+// Reporte de un usuario (foto de perfil) o de un ejercicio. `entidad` trae
+// un resumen de lo reportado (solo lo llena el backend en la vista admin);
+// `reportadoPorNombre` también es solo para esa vista.
+class Reporte {
+  final String id;
+  final String tipo; // 'usuario_foto' | 'ejercicio'
+  final String entidadId;
+  final String motivo;
+  final String estado; // 'pendiente' | 'fundado' | 'infundado'
+  final String respuestaAdmin;
+  final DateTime fecha;
+  final String reportadoPorNombre;
+  final Map<String, dynamic>? entidad;
+
+  const Reporte({
+    required this.id,
+    required this.tipo,
+    required this.entidadId,
+    required this.motivo,
+    required this.estado,
+    this.respuestaAdmin = '',
+    required this.fecha,
+    this.reportadoPorNombre = '',
+    this.entidad,
+  });
+
+  factory Reporte.fromJson(Map<String, dynamic> json) {
+    final reportador = json['reportado_por'];
+    return Reporte(
+      id: json['_id'] ?? '',
+      tipo: json['tipo'] ?? '',
+      entidadId: json['entidad_id']?.toString() ?? '',
+      motivo: json['motivo'] ?? '',
+      estado: json['estado'] ?? 'pendiente',
+      respuestaAdmin: json['respuesta_admin'] ?? '',
+      fecha: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
+      reportadoPorNombre: reportador is Map ? (reportador['nombre'] ?? '') : '',
+      entidad: json['entidad'] is Map
+          ? Map<String, dynamic>.from(json['entidad'])
+          : null,
+    );
+  }
 }
 
 // Etiquetas y emojis de los sectores disponibles

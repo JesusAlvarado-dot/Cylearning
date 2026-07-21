@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../widgets/avatar.dart';
+import '../widgets/reportar_dialog.dart';
 
 const _kBg     = Color(0xFFFFF9F2);
 const _kDark   = Color(0xFF1C1140);
@@ -385,6 +386,20 @@ class _RankingScreenState extends State<RankingScreen> {
               color: isMe ? _kPurple : _kDark,
             ),
           ),
+          // Reportar (no aparece en tu propia fila)
+          if (!isMe)
+            GestureDetector(
+              onTap: () => mostrarReportarDialog(
+                context,
+                tipo: 'usuario_foto',
+                entidadId: entry.id,
+                tituloEntidad: entry.nombre,
+              ),
+              child: const Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: Icon(Icons.flag_outlined, size: 18, color: _kMuted),
+              ),
+            ),
         ],
       ),
     );

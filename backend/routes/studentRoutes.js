@@ -5,6 +5,7 @@ const lessonController = require('../controllers/lessonController');
 const exerciseController = require('../controllers/exerciseController');
 const progressController = require('../controllers/progressController');
 const userController = require('../controllers/userController');
+const reportController = require('../controllers/reportController');
 const authMiddleware = require('../middlewares/authMiddleware');
 
 // Middleware de autenticación para todas las rutas
@@ -66,5 +67,11 @@ router.get('/ranking', progressController.obtenerRankingPublico);
 // ============== RACHA ==============
 // Reanudar racha perdida por un solo día (máx. 3 por mes)
 router.post('/racha/reanudar', progressController.reanudarRachaStudent);
+
+// ============== REPORTES ==============
+// Reportar una foto de perfil (visible en el ranking) o un ejercicio
+router.post('/reportes', reportController.crearReporte);
+// Ver mis propios reportes y la respuesta del admin
+router.get('/reportes', reportController.misReportes);
 
 module.exports = router;

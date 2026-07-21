@@ -281,33 +281,41 @@ exports.responderEjercicio = async (req, res, next) => {
     // Calcular puntos
     const puntosGanados = esCorrecta ? ejercicio.puntos : 0;
 
-    // Registrar respuesta en historial
-    const historial = await ExerciseHistory.create({
-      estudiante_id: estudianteId,
-      ejercicio_id: id,
-      leccion_id: ejercicio.leccion_id,
-      respuesta_ingresada: respuesta,
-      estado: esCorrecta ? constants.ANSWER_STATUS.CORRECT : constants.ANSWER_STATUS.INCORRECT,
-      puntos_ganados: puntosGanados,
-    });
-
-    // Actualizar progreso del estudiante
-    const progreso = await StudentProgress.findOne({
-      estudiante_id: estudianteId,
-      leccion_id: ejercicio.leccion_id,
-    });
+    // Las siguientes consultas no dependen entre sí: se disparan en paralelo
+    // en vez de una tras otra, que era el principal cuello de botella al
+    // responder (~8 viajes secuenciales a Atlas antes de este cambio).
+    const [historial, progreso, usuario] = await Promise.all([
+      ExerciseHistory.create({
+        estudiante_id: estudianteId,
+        ejercicio_id: id,
+        leccion_id: ejercicio.leccion_id,
+        respuesta_ingresada: respuesta,
+        estado: esCorrecta ? constants.ANSWER_STATUS.CORRECT : constants.ANSWER_STATUS.INCORRECT,
+        puntos_ganados: puntosGanados,
+      }),
+      StudentProgress.findOne({
+        estudiante_id: estudianteId,
+        leccion_id: ejercicio.leccion_id,
+      }),
+      User.findById(estudianteId),
+      Log.create({
+        tipo: constants.LOG_TYPES.EXERCISE_ANSWERED,
+        usuario_id: estudianteId,
+        descripcion: `Ejercicio respondido: ${ejercicio.pregunta.substring(0, 50)}`,
+        entidad_tipo: 'exercise',
+        entidad_id: ejercicio._id,
+        detalles: { esCorrecta, puntosGanados },
+      }),
+    ]);
 
     if (progreso) {
-      // Calcular puntos totales de la lección
-      const ejerciciosLeccion = await Exercise.countDocuments({
-        leccion_id: ejercicio.leccion_id,
-        activo: true,
-      });
-      const puntosTotales = await Exercise.aggregate([
+      // Conteo y suma de puntos de la lección en una sola consulta agregada
+      const [stats] = await Exercise.aggregate([
         { $match: { leccion_id: ejercicio.leccion_id, activo: true } },
-        { $group: { _id: null, total: { $sum: '$puntos' } } },
+        { $group: { _id: null, total: { $sum: '$puntos' }, cantidad: { $sum: 1 } } },
       ]);
-      progreso.puntos_totales = puntosTotales[0]?.total || 0;
+      const ejerciciosLeccion = stats?.cantidad || 0;
+      progreso.puntos_totales = stats?.total || 0;
 
       // Con reintentos los contadores no deben superar los máximos del esquema
       progreso.ejercicios_respondidos = Math.min(
@@ -334,8 +342,6 @@ exports.responderEjercicio = async (req, res, next) => {
         progreso.estado = constants.PROGRESS_STATUS.COMPLETED;
         progreso.fecha_completado = new Date();
       }
-
-      await progreso.save();
     }
 
     // Nota: los puntos totales del usuario se otorgan al completar la
@@ -343,26 +349,22 @@ exports.responderEjercicio = async (req, res, next) => {
     // responder repetidamente el mismo ejercicio no acumula puntos
 
     // La racha diaria se activa con al menos un ejercicio por día
-    const usuario = await User.findById(estudianteId);
     let racha = usuario?.racha ?? 0;
     let rachaRecuperable = 0;
     let reanudacionesRestantes = 0;
+    let usuarioCambio = false;
     if (usuario) {
-      if (registrarActividad(usuario)) await usuario.save();
+      usuarioCambio = registrarActividad(usuario);
       racha = usuario.racha;
       rachaRecuperable = usuario.racha_recuperable || 0;
       reanudacionesRestantes = usuario.reanudacionesRestantes();
     }
 
-    // Registrar en logs
-    await Log.create({
-      tipo: constants.LOG_TYPES.EXERCISE_ANSWERED,
-      usuario_id: estudianteId,
-      descripcion: `Ejercicio respondido: ${ejercicio.pregunta.substring(0, 50)}`,
-      entidad_tipo: 'exercise',
-      entidad_id: ejercicio._id,
-      detalles: { esCorrecta, puntosGanados },
-    });
+    // Guardados finales, también en paralelo
+    await Promise.all([
+      progreso ? progreso.save() : null,
+      usuarioCambio ? usuario.save() : null,
+    ]);
 
     return respuestaExito(
       res,

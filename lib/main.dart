@@ -15,6 +15,7 @@ import './screens/prueba_final_screen.dart';
 import './screens/perfil_screen.dart';
 import './screens/admin_screen.dart';
 import './screens/ranking_screen.dart';
+import './screens/mis_reportes_screen.dart';
 import './models/models.dart';
 
 void main() async {
@@ -173,6 +174,11 @@ class MyApp extends StatelessWidget {
               return MaterialPageRoute(
                 settings: settings,
                 builder: (_) => _RutaProtegida(builder: (_) => const RankingScreen()),
+              );
+            case '/mis-reportes':
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) => _RutaProtegida(builder: (_) => const MisReportesScreen()),
               );
             default:
               return MaterialPageRoute(

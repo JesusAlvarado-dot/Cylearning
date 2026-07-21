@@ -368,6 +368,14 @@ class _Header extends StatelessWidget {
                           Text('🏆 Ranking'),
                         ]),
                       ),
+                      const PopupMenuItem(
+                        value: 'reportes',
+                        child: Row(children: [
+                          Icon(Icons.flag_outlined, color: Color(0xFFEF4444)),
+                          SizedBox(width: 10),
+                          Text('Mis reportes'),
+                        ]),
+                      ),
                       if (auth.usuario?.rol == 'admin')
                         const PopupMenuItem(
                           value: 'admin',
@@ -395,6 +403,8 @@ class _Header extends StatelessWidget {
                           Navigator.of(context).pushNamed('/perfil');
                         case 'ranking':
                           Navigator.of(context).pushNamed('/ranking');
+                        case 'reportes':
+                          Navigator.of(context).pushNamed('/mis-reportes');
                         case 'admin':
                           Navigator.of(context).pushNamed('/admin');
                         case 'logout':

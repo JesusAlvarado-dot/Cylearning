@@ -8,6 +8,7 @@ const progressController = require('../controllers/progressController');
 const logController = require('../controllers/logController');
 const userController = require('../controllers/userController');
 const orgController = require('../controllers/orgController');
+const reportController = require('../controllers/reportController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const { requiereAdmin, requiereAdminOOrganizador } = require('../middlewares/roleMiddleware');
 const {
@@ -105,6 +106,10 @@ router.delete('/ejercicios/:id', exerciseController.eliminarEjercicio);
 router.get('/progreso/nivel/:nivelId', requiereAdmin, progressController.obtenerProgresoNivel);
 router.get('/estadisticas/estudiante/:estudianteId', requiereAdmin, progressController.obtenerEstadisticasEstudiante);
 router.get('/ranking/estudiantes', requiereAdmin, progressController.obtenerRankingEstudiantes);
+
+// ============== REPORTES (solo admin) ==============
+router.get('/reportes', requiereAdmin, reportController.obtenerReportes);
+router.put('/reportes/:id', requiereAdmin, reportController.resolverReporte);
 
 // ============== LOGS (solo admin) ==============
 router.get('/logs', requiereAdmin, logController.obtenerTodosLosLogs);

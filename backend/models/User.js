@@ -63,7 +63,7 @@ const userSchema = new mongoose.Schema(
     },
     medallas: {
       type: [{
-        tipo: { type: String, enum: ['oro', 'plata', 'bronce', 'estrella'] },
+        tipo: { type: String, enum: ['oro', 'plata', 'bronce', 'estrella', 'justiciero'] },
         descripcion: { type: String, default: '' },
         fecha: { type: Date, default: Date.now },
       }],
