@@ -69,7 +69,7 @@ router.get('/ranking', progressController.obtenerRankingPublico);
 router.post('/racha/reanudar', progressController.reanudarRachaStudent);
 
 // ============== REPORTES ==============
-// Reportar una foto de perfil (visible en el ranking) o un ejercicio
+// Reportar la foto o el nombre de un usuario (visibles en el ranking), o un ejercicio
 router.post('/reportes', reportController.crearReporte);
 // Ver mis propios reportes y la respuesta del admin
 router.get('/reportes', reportController.misReportes);

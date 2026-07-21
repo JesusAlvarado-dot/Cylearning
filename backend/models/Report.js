@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
 
-// Reporte de un estudiante sobre contenido problemático: foto de perfil de
-// otro usuario (visible en el ranking) o un ejercicio (contenido educativo
-// creado por una organización con fines cuestionables). El admin lo revisa
-// y decide si está fundado o no; la resolución queda registrada aquí para
-// que quien reportó pueda ver la respuesta.
-const TIPOS = ['usuario_foto', 'ejercicio'];
+// Reporte de un estudiante sobre contenido problemático: foto de perfil o
+// nombre de otro usuario (visibles en el ranking), o un ejercicio (contenido
+// educativo creado por una organización con fines cuestionables). El admin
+// lo revisa y decide si está fundado o no; la resolución queda registrada
+// aquí para que quien reportó pueda ver la respuesta.
+const TIPOS = ['usuario_foto', 'usuario_nombre', 'ejercicio'];
 const ESTADOS = ['pendiente', 'fundado', 'infundado'];
 
 const reportSchema = new mongoose.Schema(

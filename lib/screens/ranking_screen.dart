@@ -391,7 +391,7 @@ class _RankingScreenState extends State<RankingScreen> {
             GestureDetector(
               onTap: () => mostrarReportarDialog(
                 context,
-                tipo: 'usuario_foto',
+                tipos: const ['usuario_foto', 'usuario_nombre'],
                 entidadId: entry.id,
                 tituloEntidad: entry.nombre,
               ),

@@ -899,6 +899,9 @@ class _MiOrganizacionTabState extends State<_MiOrganizacionTab> {
 // TAB (admin): REPORTES
 // ─────────────────────────────────────────────────────────────────────────────
 
+bool _esReporteUsuario(String tipo) =>
+    tipo == 'usuario_foto' || tipo == 'usuario_nombre';
+
 class _ReportesTab extends StatefulWidget {
   const _ReportesTab();
   @override
@@ -960,7 +963,11 @@ class _ReportesTabState extends State<_ReportesTab> {
         backgroundColor: _bg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          r.tipo == 'usuario_foto' ? '👤 Foto de perfil reportada' : '📝 Ejercicio reportado',
+          switch (r.tipo) {
+            'usuario_foto' => '📷 Foto de perfil reportada',
+            'usuario_nombre' => '✏️ Nombre de usuario reportado',
+            _ => '📝 Ejercicio reportado',
+          },
           style: const TextStyle(fontWeight: FontWeight.w900, color: _dark, fontSize: 16),
         ),
         content: SingleChildScrollView(
@@ -968,7 +975,7 @@ class _ReportesTabState extends State<_ReportesTab> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (r.tipo == 'usuario_foto') ...[
+              if (_esReporteUsuario(r.tipo)) ...[
                 Row(children: [
                   Avatar(
                     foto: (r.entidad?['foto'] ?? '').toString(),
@@ -1024,9 +1031,11 @@ class _ReportesTabState extends State<_ReportesTab> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  r.tipo == 'usuario_foto'
-                      ? 'Si marcas Fundado, se borra la foto de perfil de este usuario.'
-                      : 'Si marcas Fundado, el ejercicio se desactiva.',
+                  switch (r.tipo) {
+                    'usuario_foto' => 'Si marcas Fundado, se borra la foto de perfil de este usuario.',
+                    'usuario_nombre' => 'Si marcas Fundado, se cambia el nombre de este usuario a uno neutro.',
+                    _ => 'Si marcas Fundado, el ejercicio se desactiva.',
+                  },
                   style: const TextStyle(fontSize: 11, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
                 ),
               ] else ...[
@@ -1130,7 +1139,7 @@ class _ReportesTabState extends State<_ReportesTab> {
     final color = pendiente
         ? _yellow
         : (fundado ? _green : _muted);
-    final titulo = r.tipo == 'usuario_foto'
+    final titulo = _esReporteUsuario(r.tipo)
         ? (r.entidad?['nombre'] ?? 'Usuario eliminado').toString()
         : (r.entidad?['pregunta'] ?? 'Ejercicio eliminado').toString();
 
@@ -1143,7 +1152,12 @@ class _ReportesTabState extends State<_ReportesTab> {
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        leading: Text(r.tipo == 'usuario_foto' ? '👤' : '📝',
+        leading: Text(
+            switch (r.tipo) {
+              'usuario_foto' => '📷',
+              'usuario_nombre' => '✏️',
+              _ => '📝',
+            },
             style: const TextStyle(fontSize: 24)),
         title: Text(titulo,
             maxLines: 1,

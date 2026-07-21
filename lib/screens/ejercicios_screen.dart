@@ -251,7 +251,7 @@ class _EjerciciosScreenState extends State<EjerciciosScreen>
                   onBack: () => Navigator.of(context).pop(),
                   onReport: () => mostrarReportarDialog(
                     context,
-                    tipo: 'ejercicio',
+                    tipos: const ['ejercicio'],
                     entidadId: ejercicios[_currentIndex].id,
                     tituloEntidad: ejercicios[_currentIndex].pregunta,
                   ),

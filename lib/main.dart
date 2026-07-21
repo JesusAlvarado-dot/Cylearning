@@ -17,6 +17,9 @@ import './screens/admin_screen.dart';
 import './screens/ranking_screen.dart';
 import './screens/mis_reportes_screen.dart';
 import './models/models.dart';
+import './widgets/inactivity_guard.dart';
+
+final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,8 +38,13 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (context) => AuthProvider(),
       child: MaterialApp(
+        navigatorKey: navigatorKey,
         title: 'CyLearn',
         debugShowCheckedModeBanner: false,
+        builder: (context, child) => InactivityGuard(
+          navigatorKey: navigatorKey,
+          child: child!,
+        ),
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
@@ -107,7 +115,11 @@ class MyApp extends StatelessWidget {
                 ),
               );
             case '/login':
-              return MaterialPageRoute(settings: settings, builder: (_) => const LoginScreen());
+              final mensaje = settings.arguments as String?;
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) => LoginScreen(mensajeAcceso: mensaje),
+              );
             case '/registro':
               return MaterialPageRoute(settings: settings, builder: (_) => const RegistroScreen());
             // Las siguientes rutas requieren sesión iniciada: si alguien abre

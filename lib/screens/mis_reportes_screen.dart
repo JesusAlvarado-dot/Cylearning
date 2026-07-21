@@ -139,9 +139,11 @@ class _MisReportesScreenState extends State<MisReportesScreen> {
     final chipTexto = pendiente
         ? '⏳ En revisión'
         : (fundado ? '✅ Fundado' : '➖ No fundado');
-    final tipoTexto = r.tipo == 'usuario_foto'
-        ? '👤 Foto de perfil'
-        : '📝 Ejercicio';
+    final tipoTexto = switch (r.tipo) {
+      'usuario_foto' => '📷 Foto de perfil',
+      'usuario_nombre' => '✏️ Nombre de usuario',
+      _ => '📝 Ejercicio',
+    };
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

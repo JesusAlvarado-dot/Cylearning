@@ -11,7 +11,9 @@ const MENSAJES_POR_DEFECTO = {
     'Recibimos tu reporte. Lo revisamos y, por ahora, no encontramos evidencia suficiente para tomar acción.',
 };
 
-// POST /api/student/reportes  { tipo: 'usuario_foto'|'ejercicio', entidad_id, motivo }
+const TIPOS_USUARIO = ['usuario_foto', 'usuario_nombre'];
+
+// POST /api/student/reportes  { tipo: 'usuario_foto'|'usuario_nombre'|'ejercicio', entidad_id, motivo }
 exports.crearReporte = async (req, res, next) => {
   try {
     const { tipo, entidad_id, motivo } = req.body;
@@ -23,7 +25,7 @@ exports.crearReporte = async (req, res, next) => {
       return respuestaError(res, 'El motivo es requerido', 400);
     }
 
-    if (tipo === 'usuario_foto') {
+    if (TIPOS_USUARIO.includes(tipo)) {
       if (entidad_id === String(req.usuarioId)) {
         return respuestaError(res, 'No puedes reportarte a ti mismo', 400);
       }
@@ -82,7 +84,7 @@ exports.obtenerReportes = async (req, res, next) => {
     const conDetalle = await Promise.all(
       reportes.map(async (r) => {
         const obj = r.toObject();
-        if (r.tipo === 'usuario_foto') {
+        if (TIPOS_USUARIO.includes(r.tipo)) {
           const u = await User.findById(r.entidad_id).select('nombre email foto activo');
           obj.entidad = u ? { nombre: u.nombre, email: u.email, foto: u.foto, activo: u.activo } : null;
         } else {
@@ -126,6 +128,12 @@ exports.resolverReporte = async (req, res, next) => {
       // Consecuencia sobre lo reportado
       if (reporte.tipo === 'usuario_foto') {
         await User.findByIdAndUpdate(reporte.entidad_id, { foto: '' });
+      } else if (reporte.tipo === 'usuario_nombre') {
+        // No se puede dejar el nombre vacío (mínimo 3 caracteres en el
+        // esquema), así que se reemplaza por un nombre neutro; el usuario
+        // puede ponerse otro desde su perfil.
+        const nombreNeutro = `Usuario${String(reporte.entidad_id).slice(-5)}`;
+        await User.findByIdAndUpdate(reporte.entidad_id, { nombre: nombreNeutro });
       } else {
         await Exercise.findByIdAndUpdate(reporte.entidad_id, { activo: false });
       }

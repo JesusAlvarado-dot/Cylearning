@@ -6,15 +6,31 @@ const _kDark = Color(0xFF1C1140);
 const _kMuted = Color(0xFF8E8EA9);
 const _kRed = Color(0xFFEF4444);
 
-// Abre un diálogo para reportar una foto de perfil o un ejercicio. Muestra
+const _tipoInfo = {
+  'usuario_foto': ('📷', 'Foto de perfil'),
+  'usuario_nombre': ('✏️', 'Nombre de usuario'),
+  'ejercicio': ('📝', 'Ejercicio'),
+};
+
+const _tipoDescripcion = {
+  'usuario_foto': 'Cuéntanos por qué esta foto de perfil te parece inapropiada.',
+  'usuario_nombre': 'Cuéntanos por qué este nombre de usuario te parece inapropiado.',
+  'ejercicio': 'Cuéntanos qué tiene de problemático este ejercicio.',
+};
+
+// Abre un diálogo para reportar contenido. `tipos` define qué se puede
+// reportar: si trae más de una opción (p. ej. foto y nombre de un usuario)
+// se muestra un selector; si trae una sola, va directo al motivo. Muestra
 // un snackbar de éxito/error al terminar. `tituloEntidad` es opcional, solo
 // para dar contexto (p. ej. el nombre del usuario o la pregunta reportada).
 Future<void> mostrarReportarDialog(
   BuildContext context, {
-  required String tipo,
+  required List<String> tipos,
   required String entidadId,
   String? tituloEntidad,
 }) async {
+  assert(tipos.isNotEmpty);
+  String tipoSeleccionado = tipos.first;
   final motivoCtrl = TextEditingController();
   String error = '';
   bool enviando = false;
@@ -52,11 +68,42 @@ Future<void> mostrarReportarDialog(
                         color: _kMuted,
                         fontWeight: FontWeight.w600)),
               ],
+              if (tipos.length > 1) ...[
+                const SizedBox(height: 14),
+                const Text('¿Qué quieres reportar?',
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w700, color: _kDark)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: tipos.map((t) {
+                    final info = _tipoInfo[t] ?? ('🚩', t);
+                    final activo = t == tipoSeleccionado;
+                    return GestureDetector(
+                      onTap: () => setS(() => tipoSeleccionado = t),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: activo ? _kRed.withValues(alpha: 0.1) : Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: activo ? _kRed : const Color(0xFFE5E7EB),
+                              width: 1.5),
+                        ),
+                        child: Text('${info.$1} ${info.$2}',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: activo ? _kRed : _kMuted)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
               const SizedBox(height: 14),
               Text(
-                tipo == 'usuario_foto'
-                    ? 'Cuéntanos por qué esta foto de perfil te parece inapropiada.'
-                    : 'Cuéntanos qué tiene de problemático este ejercicio.',
+                _tipoDescripcion[tipoSeleccionado] ?? 'Cuéntanos qué está mal.',
                 style: const TextStyle(fontSize: 13, color: _kMuted, height: 1.4),
               ),
               const SizedBox(height: 14),
@@ -121,7 +168,7 @@ Future<void> mostrarReportarDialog(
                             });
                             try {
                               await ApiService.crearReporte(
-                                tipo: tipo,
+                                tipo: tipoSeleccionado,
                                 entidadId: entidadId,
                                 motivo: motivo,
                               );
