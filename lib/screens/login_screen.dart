@@ -335,12 +335,14 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    // Load progress then navigate to the current caminito
+    // Progreso y niveles no dependen entre sí: se piden en paralelo para
+    // llegar al caminito más rápido tras el login
+    final nivelesF = ApiService.getNiveles();
     await auth.loadProgreso();
     if (!mounted) return;
 
     try {
-      final niveles = await ApiService.getNiveles();
+      final niveles = await nivelesF;
       if (!mounted) return;
       // Sort by orden to guarantee order
       niveles.sort((a, b) => a.orden.compareTo(b.orden));

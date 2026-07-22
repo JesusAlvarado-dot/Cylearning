@@ -141,26 +141,26 @@ exports.login = async (req, res, next) => {
     usuario.ultimo_acceso = new Date();
     await usuario.save();
 
-    // Registrar en logs
-    await Log.create({
-      tipo: constants.LOG_TYPES.LOGIN,
-      usuario_id: usuario._id,
-      descripcion: 'Usuario inició sesión',
-      ip_address: obtenerIP(req),
-    });
-
     // Generar token
     const token = jwtUtils.generarToken(usuario._id, usuario.rol);
 
-    // Incluir los datos de la organización (sector define el tema visual)
-    const conOrg = await User.findById(usuario._id)
-      .populate('organizacion_id', 'nombre sector codigo mostrar_mensajes_mascota foto');
+    // El log y el populate de la organización (sector define el tema visual)
+    // no dependen entre sí: en paralelo, y sin el findById extra que había
+    await Promise.all([
+      usuario.populate('organizacion_id', 'nombre sector codigo mostrar_mensajes_mascota foto'),
+      Log.create({
+        tipo: constants.LOG_TYPES.LOGIN,
+        usuario_id: usuario._id,
+        descripcion: 'Usuario inició sesión',
+        ip_address: obtenerIP(req),
+      }),
+    ]);
 
-    // Respuesta
+    // Respuesta (toJSON quita la contraseña aunque se haya cargado con +contrasena)
     return respuestaExito(
       res,
       {
-        usuario: conOrg.toJSON(),
+        usuario: usuario.toJSON(),
         token,
       },
       constants.SUCCESS_MESSAGES.LOGIN_SUCCESS
@@ -196,16 +196,8 @@ exports.loginGoogle = async (req, res, next) => {
     let usuario = await User.findOne({ $or: [{ googleId }, { email }] });
 
     if (usuario) {
-      let cambios = false;
-      if (!usuario.googleId) {
-        usuario.googleId = googleId;
-        cambios = true;
-      }
-      if (!usuario.foto && picture) {
-        usuario.foto = picture;
-        cambios = true;
-      }
-      if (cambios) await usuario.save();
+      if (!usuario.googleId) usuario.googleId = googleId;
+      if (!usuario.foto && picture) usuario.foto = picture;
     } else {
       let organizacionId, rol;
       try {
@@ -223,27 +215,28 @@ exports.loginGoogle = async (req, res, next) => {
         rol,
         organizacion_id: organizacionId,
       });
-      await usuario.save();
     }
 
+    // Un solo save con todos los cambios; el log y el populate corren en
+    // paralelo para no encadenar viajes a la base de datos (esto era uno de
+    // los motivos de la lentitud percibida al entrar con Google).
     usuario.ultimo_acceso = new Date();
     await usuario.save();
-
-    await Log.create({
-      tipo: constants.LOG_TYPES.LOGIN,
-      usuario_id: usuario._id,
-      descripcion: 'Usuario inició sesión con Google',
-      ip_address: obtenerIP(req),
-    });
-
     const token = jwtUtils.generarToken(usuario._id, usuario.rol);
-    const conOrg = await User.findById(usuario._id)
-      .populate('organizacion_id', 'nombre sector codigo mostrar_mensajes_mascota foto');
+    await Promise.all([
+      usuario.populate('organizacion_id', 'nombre sector codigo mostrar_mensajes_mascota foto'),
+      Log.create({
+        tipo: constants.LOG_TYPES.LOGIN,
+        usuario_id: usuario._id,
+        descripcion: 'Usuario inició sesión con Google',
+        ip_address: obtenerIP(req),
+      }),
+    ]);
 
     return respuestaExito(
       res,
       {
-        usuario: conOrg.toJSON(),
+        usuario: usuario.toJSON(),
         token,
       },
       constants.SUCCESS_MESSAGES.LOGIN_SUCCESS

@@ -25,6 +25,17 @@ class ApiService {
     baseUrl = Config.apiUrl;
   }
 
+  // Despierta al backend del reposo del plan gratuito de Render (el arranque
+  // en frío tarda 30-50s). Se dispara al abrir la app SIN esperar respuesta:
+  // para cuando el usuario termina de escribir o elegir su cuenta de Google,
+  // el servidor ya está listo y el login se siente inmediato.
+  static void despertarServidor() {
+    http
+        .get(Uri.parse('$baseUrl/salud'))
+        .timeout(const Duration(seconds: 90))
+        .then((_) {}, onError: (_) {});
+  }
+
   static Future<void> initToken() async {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString('token');

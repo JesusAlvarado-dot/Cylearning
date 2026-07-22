@@ -6,6 +6,11 @@ const exerciseRoutes = require('./exerciseRoutes');
 const publicRoutes = require('./publicRoutes');
 
 module.exports = (app) => {
+  // Salud/despertador: la app lo llama al arrancar para sacar al servidor
+  // del reposo del plan gratuito de Render ANTES de que el usuario intente
+  // iniciar sesión (el arranque en frío tarda 30-50s).
+  app.get('/api/salud', (req, res) => res.json({ ok: true }));
+
   // Rutas de autenticación
   app.use('/api/auth', authRoutes);
 

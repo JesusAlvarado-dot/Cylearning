@@ -33,17 +33,18 @@ class AuthProvider with ChangeNotifier {
     _cargando = true;
     final prefs = await SharedPreferences.getInstance();
 
-    // Restaurar la sesión solo si el usuario marcó "Recordarme"
+    // Restaurar la sesión solo si el usuario marcó "Recordarme".
+    // getUsuarioActual ya valida el token (lanza si expiró/es inválido),
+    // así que no hace falta la llamada previa a verificarToken — eran dos
+    // peticiones idénticas a /auth/me en cada arranque.
     if (prefs.getBool('recordar') ?? false) {
       await ApiService.initToken();
       try {
-        if (await ApiService.verificarToken()) {
-          _usuario = await ApiService.getUsuarioActual();
-          _racha = _usuario?.racha ?? 0;
-          _isAuthenticated = true;
-          await loadProgreso();
-          NotificationService.programarRecordatorios(racha: _racha);
-        }
+        _usuario = await ApiService.getUsuarioActual();
+        _racha = _usuario?.racha ?? 0;
+        _isAuthenticated = true;
+        await loadProgreso();
+        NotificationService.programarRecordatorios(racha: _racha);
       } catch (_) {}
     }
 

@@ -26,6 +26,8 @@ void main() async {
   await dotenv.load(fileName: '.env');
   Config.printConfig();
   ApiService.initialize();
+  // Sin await: solo dispara el ping para sacar al backend del reposo
+  ApiService.despertarServidor();
   await NotificationService.init();
   runApp(const MyApp());
 }
